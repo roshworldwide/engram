@@ -1,0 +1,78 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/engram-core",
+    "crates/engram-storage",
+    "crates/engram-consistency",
+    "crates/engram-query",
+    "crates/engram-server",
+    "crates/engram-py",
+    "crates/engram-cli",
+    "xtask",
+]
+# The fuzz crate is a separate cargo-fuzz workspace (built with nightly) and is
+# intentionally excluded from the default build graph.
+exclude = ["fuzz"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/engram-db/engram"
+authors = ["Engram contributors"]
+rust-version = "1.96"
+
+# ---------------------------------------------------------------------------
+# Shared dependency versions. Members opt in with `dep.workspace = true`. These
+# entries are inert until a member references them, so the dependency-free
+# Phase 0 scaffold neither downloads nor compiles any of them. Versions are
+# pinned for real when each phase first pulls the crate in.
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+# Core serialization / storage primitives (Phase 1)
+serde = { version = "1", features = ["derive"] }
+rmp-serde = "1"
+memmap2 = "0.9"
+crc32fast = "1"
+thiserror = "2"
+anyhow = "1"
+parking_lot = "0.12"
+arc-swap = "1"
+crossbeam-epoch = "0.9"
+bytes = "1"
+# Async + service surfaces (Phase 3)
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tonic = "0.12"
+prost = "0.13"
+tonic-build = "0.12"
+# Python bindings (Phase 3)
+pyo3 = { version = "0.23", features = ["extension-module"] }
+# Testing / benchmarking / dev (all phases)
+proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"
+rand = "0.8"
+# Internal crates
+engram-core = { path = "crates/engram-core" }
+engram-storage = { path = "crates/engram-storage" }
+engram-consistency = { path = "crates/engram-consistency" }
+engram-query = { path = "crates/engram-query" }
+
+[workspace.lints.clippy]
+# CI and `cargo xtask ci` run clippy with `-D warnings`, which promotes every
+# warning here to a hard error. Keeping it at `warn` in the manifest lets plain
+# `cargo build` surface lints without blocking ad-hoc local builds.
+all = { level = "warn", priority = -1 }
+
+# Release/bench profiles tuned for reproducible criterion numbers.
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = false
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Core gate — must be green on every push/PR (mirrors `cargo xtask ci`).
+  gate:
+    name: fmt · clippy · build · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+      - name: clippy (-D warnings)
+        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: build
+        run: cargo build --all-targets --workspace
+      - name: test
+        run: cargo test --workspace
+
+  # Supply-chain gate (Q6): licenses + advisories + the no-storage-engine ban.
+  supply-chain:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  # Line coverage (Q3): target >= 90% on engram-storage + engram-consistency.
+  # The numeric threshold is enforced starting in Phase 4 (--fail-under-lines 90).
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - name: coverage summary
+        run: cargo llvm-cov --workspace --summary-only
+
+  # Benchmarks must at least compile on every push (full runs are manual / nightly).
+  bench-smoke:
+    name: bench smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build benches
+        run: cargo bench --workspace --no-run
+
+  # Fuzz smoke (Q2): build (and briefly run) every fuzz target on nightly.
+  fuzz-smoke:
+    name: fuzz smoke (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@cargo-fuzz
+      - name: build fuzz targets (if any)
+        run: |
+          if [ -f fuzz/Cargo.toml ]; then
+            cargo +nightly fuzz build
+          else
+            echo "no fuzz targets yet — skipping (targets land in Phase 1)"
+          fi

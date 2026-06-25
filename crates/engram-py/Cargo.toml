@@ -1,0 +1,18 @@
+[package]
+name = "engram-py"
+description = "Python bindings for Engram (PyO3) — builds the `engram` wheel via maturin."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+# In Phase 3d this becomes `crate-type = ["cdylib"]` with a PyO3 dependency and a
+# maturin build backend. Kept as a plain library for the dependency-free Phase 0
+# scaffold so the whole workspace builds on stable without maturin installed.
+[dependencies]
+engram-core = { workspace = true }

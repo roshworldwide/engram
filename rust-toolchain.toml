@@ -1,0 +1,8 @@
+[toolchain]
+# Engram pins the stable channel. The build is validated against the stable
+# toolchain installed on the reference machine (rustc 1.96.0 at time of writing).
+# `cargo-fuzz` requires a nightly toolchain; CI installs that separately for the
+# fuzz jobs only — the core engine builds and tests on stable.
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

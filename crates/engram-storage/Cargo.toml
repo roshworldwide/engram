@@ -1,0 +1,15 @@
+[package]
+name = "engram-storage"
+description = "Engram storage engine: write-ahead log, copy-on-write B-tree (MVCC), and the four memory stores."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+engram-core = { workspace = true }

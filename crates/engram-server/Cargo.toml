@@ -1,0 +1,16 @@
+[package]
+name = "engram-server"
+description = "Engram network surfaces: REST (axum) and gRPC (tonic) front-ends over the query engine."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+engram-core = { workspace = true }
+engram-query = { workspace = true }

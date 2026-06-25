@@ -1,0 +1,36 @@
+# Rust build artifacts
+/target
+**/target
+**/*.rs.bk
+*.pdb
+
+# cargo-fuzz artifacts
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+
+# Coverage (cargo-llvm-cov)
+*.profraw
+*.profdata
+/coverage
+
+# Python / maturin / PyO3
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+/crates/engram-py/target
+dist/
+build/
+
+# Engram local data directories created by examples / demos / CLI
+*.engram/
+/demos/**/data/
+/examples/**/data/
+scratch/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
