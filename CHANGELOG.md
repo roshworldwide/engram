@@ -6,6 +6,21 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 1b — Write-Ahead Log
+
+- `engram-storage::wal` — an append-only, crash-safe WAL (R6): length-prefixed frames with a per-entry
+  **CRC32** and a file header, an LSN writer with **batched fsync-on-commit** (group commit), a scanner that
+  stops cleanly at the first torn/corrupt frame, `Wal::recover` (replays only the committed-transaction redo
+  set), `Wal::open` (truncates a torn tail and resumes LSNs), and `Wal::compact` (atomic checkpoint/compaction
+  via temp-file + rename).
+- `WalOp` (`Put`/`Delete` carrying `RecordKind`, `Commit`, `Checkpoint`), `WalEntry`, `Recovered`, and a
+  `StorageError`/`Result` (`thiserror`).
+- Tests: 9 unit + 4 proptest properties (all-committed round-trip; only-committed recovery; truncate-at-any-
+  offset is a safe prefix; arbitrary bytes never panic) + 1 doctest. `wal_reader` cargo-fuzz target
+  (390k-run smoke, 0 crashes).
+- **P8 met:** recover 1,000,000 committed entries in **~128 ms** (target < 2 s), 100% recovered. WAL append
+  upper bound **1.56 M durable writes/s** (batched group commit).
+
 ### Phase 1a — Core types & MessagePack codec
 
 - `engram-core` now implements the full §5 data model: `MemoryId` (128-bit, ULID-style, time-sortable,

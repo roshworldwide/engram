@@ -15,10 +15,18 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 engram-core = { path = "../crates/engram-core" }
+engram-storage = { path = "../crates/engram-storage" }
 
 [[bin]]
 name = "record_codec"
 path = "fuzz_targets/record_codec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wal_reader"
+path = "fuzz_targets/wal_reader.rs"
 test = false
 doc = false
 bench = false

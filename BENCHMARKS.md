@@ -33,14 +33,14 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 
 | #  | Metric | Target | Measured | Status |
 |----|--------|--------|----------|--------|
-| P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | — | ⬜ Phase 2a |
-| P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | — | ⬜ Phase 2a |
+| P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | WAL-only upper bound **1.56 M/s** (durable, 10k-batch group commit) | ⬜ Phase 2a (store) — WAL signal ✅ |
+| P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | WAL-only upper bound **4.46 M/s** (append, no fsync) | ⬜ Phase 2a (store) — WAL signal ✅ |
 | P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | — | ⬜ Phase 2b |
 | P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | — | ⬜ Phase 2b |
 | P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | — | ⬜ Phase 2d |
 | P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | — | ⬜ Phase 3b |
 | P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | **eval primitive 1.1–5.3 ns p50** (exp 3.0, pow 5.3, step 1.2, none 1.1) | 🟡 primitive ✅; full read-path Phase 2b |
-| P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | — | ⬜ Phase 1b |
+| P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | **128 ms median** (p99 ≈ 136 ms), 100% committed recovered | ✅ Phase 1b (~15× under) |
 | Q4 | Time-travel vs. hand-built PostgreSQL bitemporal schema | ≥ 10× faster | — | ⬜ Phase 4c |
 
 ## Quality gates
@@ -48,7 +48,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | #  | Gate | Target | Status |
 |----|------|--------|--------|
 | Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ⬜ Phase 3b |
-| Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec`: 2.1M-run local smoke, 0 crashes (~100k exec/s); full 10M nightly + 3 remaining targets pending |
+| Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k local smoke, **0 crashes**; full 10M nightly + 2 remaining targets (btree_ops/dag_decode) pending |
 | Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | ⬜ Phase 4 |
 | Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ⬜ Phase 3b |
 | Q6 | Clippy / rustfmt / `cargo test` / `cargo deny` | green every commit, clippy `-D warnings` | ✅ (all four green locally + in CI) |
@@ -66,3 +66,14 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
   magnitude under the < 500 ns P7 target. (Full per-belief P7 including the read path lands in Phase 2b.)
 - **`record_codec` fuzz smoke** (`cargo +nightly fuzz run record_codec -max_total_time=20`):
   **2,104,093 runs, 0 crashes**, ~100k exec/s, peak RSS 430 MB.
+
+## Phase 1b measured (2026-06-26, reference machine)
+
+- **P8 — recover 1,000,000 committed WAL entries** (`cargo bench -p engram-storage --bench recovery`,
+  criterion, 10 samples): **123.6 / 128.6 / 135.6 ms** (min/median/max), 100% of committed records recovered.
+  Target < 2 s ⇒ ~15× headroom.
+- **WAL append throughput** (`cargo bench -p engram-storage --bench wal_append`, 32-byte payload):
+  durable 10k-batch group commit **1.48–1.62 Melem/s**; buffered append (no fsync) **4.39–4.51 Melem/s**.
+  These are WAL-only upper bounds; the official P1/P2 (with B-tree indexing) are measured in Phase 2a.
+- **`wal_reader` fuzz smoke** (`cargo +nightly fuzz run wal_reader -max_total_time=15`):
+  **390,211 runs, 0 crashes**.

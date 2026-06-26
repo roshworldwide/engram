@@ -19,7 +19,8 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | R3 | Bitemporal time-travel | `engram-query/src/time_travel.rs` | `time_travel::tests::query_at_time` + bench (P4) | ⬜ Phase 2b |
 | R4 | Confidence decay (lazy) | `engram-core/src/decay.rs` | `decay::tests` (monotonicity/bounds) + `decay_eval` bench | 🟡 eval primitive ✅ (1a, 1.1–5.3 ns); read-path P7 Phase 2b |
 | R5 | Causal-provenance DAG | `engram-storage/src/dag.rs` (`CausalEdge` type in core) | `dag::tests` (chains + cycle reject) + bench (P5) | ⬜ Phase 2d (edge type ✅ in 1a) |
-| R6 | CoW B-tree + WAL → MVCC | `engram-storage/src/{btree,wal}.rs` | concurrent-reader test + recovery (P8) | ⬜ Phase 1b/1c |
+| R6 | Write-Ahead Log | `engram-storage/src/wal.rs` | `wal::tests` + `tests/wal_recovery.rs` (proptest) + recovery bench (P8) | ✅ Phase 1b |
+| R6 | CoW B-tree → MVCC | `engram-storage/src/btree.rs` | concurrent-reader snapshot test + `btree_ops` fuzz | ⬜ Phase 1c |
 | R7 | Agent Causal Consistency | `engram-consistency/src/*` | ACC property suite (Q1) | ⬜ Phase 3 |
 | R8 | Python SDK via PyO3 | `crates/engram-py/*` | end-to-end Python test | ⬜ Phase 3d |
 | R9 | Research-grade rigor | `docs/paper/*`, benches, proptests | paper + reproducible eval | ⬜ Phase 5 |
@@ -35,14 +36,14 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | P5 | < 2 ms p99 provenance trace (≤ 1000) | `benches/provenance.rs` | ⬜ Phase 2d |
 | P6 | ≥ 250k ev/s, 10 instances, ACC on | `benches/multi_instance.rs` | ⬜ Phase 3b |
 | P7 | < 500 ns/belief decay, 0 background CPU | `crates/engram-core/benches/decay_eval.rs` | 🟡 primitive 1.1–5.3 ns ✅; read-path Phase 2b |
-| P8 | recover 1M WAL entries < 2 s | `benches/recovery.rs` + storage test | ⬜ Phase 1b |
+| P8 | recover 1M WAL entries < 2 s | `crates/engram-storage/benches/recovery.rs` | ✅ Phase 1b (128 ms median, 100% recovered) |
 
 ## Quality metrics (Q1–Q6)
 
 | # | Metric | Proving artifact | Status |
 |---|--------|------------------|--------|
 | Q1 | ≥ 1,000 randomized multi-agent histories, ACC holds | `engram-consistency` proptest suite | ⬜ Phase 3b |
-| Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` (nightly) | 🟡 `record_codec` 2.1M smoke, 0 crashes; full 10M ×4 pending |
+| Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` (nightly) | 🟡 `record_codec` 2.1M + `wal_reader` 390k smoke, 0 crashes; full 10M + btree_ops/dag_decode pending |
 | Q3 | ≥ 90% coverage (storage + consistency) | `cargo llvm-cov` in CI | ⬜ Phase 4 |
 | Q4 | ≥ 10× faster time-travel vs PostgreSQL | `benches/compare_postgres/` | ⬜ Phase 4c |
 | Q5 | ACC overhead O(\|agents\|), ≤ 16 B/slot, proven | `engram-consistency` size test + bench | ⬜ Phase 3b |

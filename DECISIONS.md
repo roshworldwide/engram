@@ -77,3 +77,26 @@ surface to one well-tested place.
 - **Injectable `Rng` via a dependency-free `SplitMix64`** (deterministic, seedable) rather than pulling
   `rand` into core; `SystemRng` seeds it from the wall clock XOR a process counter. Non-cryptographic by
   design — ids must be unique, not unguessable.
+
+## ADR-0008 — WAL frame format & recovery semantics (Phase 1b)
+
+**Status:** accepted (Phase 1b).
+
+- **Frame = `[region_len:u32][region][crc32:u32]`, `region = [meta_len:u32][meta][record]`.** The `record`
+  payload is kept *outside* the MessagePack `meta` so large already-serialized records are not re-encoded as
+  MessagePack integer arrays (serde encodes `&[u8]`/`Vec<u8>` as sequences). `meta` (lsn, tx_id, op) stays
+  small and named/evolvable. A leading 12-byte magic+version header identifies the file.
+- **CRC32 per entry (covers `region`).** On read, any frame whose length is implausible (`< 4` or
+  `> 256 MiB`), whose bytes are short (torn), or whose CRC/meta fails to decode is treated as **the end of
+  the log** — recovery stops there. This makes a torn tail from a crash a non-event.
+- **Redo only committed transactions.** `recover` returns `Put`/`Delete` entries whose `tx_id` has a durable
+  `Commit` marker. A crash that tore the tail before a transaction's commit loses exactly that transaction
+  and nothing committed earlier. `open` additionally truncates the torn tail so subsequent appends never
+  follow garbage, and resumes LSNs at `max_valid + 1`.
+- **Batched fsync (group commit).** `append` only buffers; `commit`/`sync` flush + `fsync`. Throughput scales
+  with batch size (measured 1.56 M durable writes/s at a 10k batch) without sacrificing the durability point.
+- **Compaction is copy-and-rename.** `compact(up_to_lsn)` rewrites surviving frames to a temp file, fsyncs,
+  and atomically `rename`s over the original — never leaving a partially-written live log.
+- **`record` stored raw, not interpreted at the WAL layer.** The WAL is a durable, ordered, checksummed byte
+  log; routing `record` bytes to the right store on replay (via `WalOp`'s `RecordKind`) is the stores' job
+  (Phase 2). This keeps the WAL reusable across all four memory types.

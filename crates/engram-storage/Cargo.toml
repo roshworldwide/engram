@@ -13,3 +13,19 @@ workspace = true
 
 [dependencies]
 engram-core = { workspace = true }
+serde = { workspace = true }
+crc32fast = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+[[bench]]
+name = "recovery"
+harness = false
+
+[[bench]]
+name = "wal_append"
+harness = false

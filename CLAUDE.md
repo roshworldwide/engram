@@ -25,9 +25,14 @@ quick-orientation companion to it.
   (`Record`/`RecordKind`), and `thiserror` errors. Tests: 19 unit + 7 proptest + 5 doctest, plus the
   `record_codec` fuzz target (2.1M-run smoke, 0 crashes). Decay eval **1.1–5.3 ns** (P7 primitive met).
   `cargo xtask ci` GREEN.
-- **Phase 1b — Write-Ahead Log: NOT STARTED.** Next: LSN, append-only writer with batched fsync-on-commit,
-  reader, checkpoint/compaction, CRC32 per entry; recover 1M entries < 2 s (P8); `wal_reader` fuzz target.
-- **Phase 1c — Copy-on-write B-tree (MVCC):** follows 1b.
+- **Phase 1b — Write-Ahead Log: COMPLETE.** `engram-storage::wal` — length+CRC32 framed, file header, LSN
+  writer with batched fsync-on-commit, scanner that stops at the first torn frame, `recover` (committed-tx
+  redo set), `open` (torn-tail truncation), `compact` (atomic checkpoint). 9 unit + 4 proptest + 1 doctest;
+  `wal_reader` fuzz (390k smoke, 0 crashes). **P8 met: recover 1M in ~128 ms** (target < 2 s); WAL append
+  upper bound 1.56 M durable writes/s. `cargo xtask ci` GREEN.
+- **Phase 1c — Copy-on-write B-tree (MVCC): NOT STARTED.** Next: leaf+internal nodes, `insert`/`get`/
+  `range_scan`, copy-on-write write path with atomic root swap, readers pinned to a snapshot; 1M-key sorted
+  scan + old-root-readable-while-writer-advances test; `btree_ops` fuzz. The WAL durably backs writes.
 
 ## How to build, test, gate
 

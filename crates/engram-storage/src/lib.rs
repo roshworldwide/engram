@@ -1,17 +1,37 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 //! # engram-storage
 //!
-//! The from-scratch storage engine (R1): on-disk record format, write-ahead log
-//! (R6), copy-on-write B-tree providing MVCC (R6), the four memory stores (R2),
-//! and the causal-provenance DAG store (R5).
+//! The from-scratch storage engine (R1): the write-ahead log (R6, [`wal`]), and
+//! — in later phases — the copy-on-write B-tree providing MVCC, the four memory
+//! stores (R2), and the causal-provenance DAG store (R5).
 //!
 //! ## `unsafe` policy
 //!
 //! This is the **only** crate in the workspace permitted to use `unsafe`, and
-//! only for the memory-mapped / zero-copy I/O paths added in Phase 1+. Every
-//! `unsafe` block must carry a `// SAFETY:` proof comment and a focused test.
-//! There is no `unsafe` code yet — this remains a Phase 0 scaffold until the WAL
-//! and B-tree land in Phase 1b/1c.
+//! only for the memory-mapped / zero-copy I/O paths added with the B-tree
+//! (Phase 1c). Every `unsafe` block must carry a `// SAFETY:` proof comment and
+//! a focused test. The WAL (Phase 1b) uses no `unsafe`.
+//!
+//! ```
+//! use engram_storage::{Wal, WalOp};
+//! use engram_core::RecordKind;
+//!
+//! let dir = std::env::temp_dir().join("engram-doctest-wal");
+//! let _ = std::fs::remove_file(&dir);
+//! let mut wal = Wal::create(&dir).unwrap();
+//! wal.append(1, WalOp::Put(RecordKind::Episodic), b"hello").unwrap();
+//! wal.commit(1).unwrap();
+//! let recovered = Wal::recover(&dir).unwrap();
+//! assert_eq!(recovered.entries.len(), 1);
+//! assert_eq!(recovered.entries[0].record, b"hello");
+//! # let _ = std::fs::remove_file(&dir);
+//! ```
+
+pub mod error;
+pub mod wal;
+
+pub use error::{Result, StorageError};
+pub use wal::{scan_bytes, Recovered, Wal, WalEntry, WalOp};
 
 /// The semantic version of the Engram storage crate.
 #[must_use]
@@ -28,7 +48,6 @@ mod tests {
 
     #[test]
     fn links_against_core() {
-        // Proves the inter-crate dependency edge is wired before Phase 1.
         assert!(!engram_core::version().is_empty());
     }
 }
