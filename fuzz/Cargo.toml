@@ -1,0 +1,27 @@
+# Standalone cargo-fuzz workspace (nightly). Excluded from the root workspace in
+# the top-level Cargo.toml; the empty [workspace] table below makes this its own
+# workspace root so the two never conflict.
+[package]
+name = "engram-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+engram-core = { path = "../crates/engram-core" }
+
+[[bin]]
+name = "record_codec"
+path = "fuzz_targets/record_codec.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

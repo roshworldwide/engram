@@ -56,3 +56,24 @@ reproducible Phase 0 gate and keeps the dependency graph honest as it grows.
 Only the storage crate may use `unsafe`, and only for mmap/zero-copy paths, each with a `// SAFETY:` proof
 comment and a focused test. All other crates forbid `unsafe` at the crate level. This concentrates the audit
 surface to one well-tested place.
+
+## ADR-0007 — Phase 1a data-model & codec choices
+
+**Status:** accepted (Phase 1a).
+
+- **`MemoryId` is a ULID** (48-bit ms timestamp ‖ 80-bit randomness) so ids are globally unique *and*
+  time-sortable — range scans over ids approximate time order for free, which the episodic store exploits in
+  Phase 2a. Canonical text form is 26-char Crockford base32 (lenient decode: I/L→1, O→0).
+- **Format-aware serde for `MemoryId`:** human-readable formats (JSON/REST) get the Crockford string;
+  binary formats (MessagePack/on-disk) get a compact `(u64, u64)` pair. This sidesteps MessagePack's lack of
+  a native 128-bit integer without a `serde_bytes` dependency.
+- **MessagePack in *named* form** (`to_vec_named`): records serialize as field-name→value maps so the on-disk
+  format can evolve (add fields with `#[serde(default)]`) without breaking old data. Slightly larger than
+  array form; worth it for a storage engine that must read its own history.
+- **`Step` decay is relative:** `eval(c0, elapsed_ns)` only receives elapsed time, so `Step::drop_at` is
+  interpreted as an elapsed offset (ns since the belief's reference time), not an absolute wall-clock time.
+  `PowerLaw` is regularized as `(1+t)^(−β)` to avoid the `t→0` singularity. Both keep `eval` pure, branch-
+  light, and allocation-free (measured 1.1–5.3 ns).
+- **Injectable `Rng` via a dependency-free `SplitMix64`** (deterministic, seedable) rather than pulling
+  `rand` into core; `SystemRng` seeds it from the wall clock XOR a process counter. Non-cryptographic by
+  design — ids must be unique, not unguessable.

@@ -18,8 +18,16 @@ quick-orientation companion to it.
 - **Phase 0 — Scaffold & CI: COMPLETE.** Cargo workspace, 8 crates (7 + xtask) compiling, CI wired,
   living docs in place. `cargo xtask ci` is **GREEN** on the reference machine: fmt-check, clippy
   `-D warnings`, build, test, **and `cargo-deny`** (advisories/bans/licenses/sources ok) all pass.
-- **Phase 1 — Storage foundation: NOT STARTED.** Next up: core types + MessagePack codec (1a), WAL (1b),
-  copy-on-write B-tree / MVCC (1c).
+- **Phase 1a — Core types & codec: COMPLETE.** `engram-core` implements the full §5 data model:
+  `MemoryId` (128-bit ULID, time-sortable, Crockford base32 + format-aware serde), the other ids,
+  `Timestamp`, injectable `Clock`/`Rng` (+ monotonic `MemoryIdGenerator`), `EventType`/`EdgeType`,
+  lazy `DecayFunction::eval`, the four record types + `CausalEdge`, the MessagePack codec
+  (`Record`/`RecordKind`), and `thiserror` errors. Tests: 19 unit + 7 proptest + 5 doctest, plus the
+  `record_codec` fuzz target (2.1M-run smoke, 0 crashes). Decay eval **1.1–5.3 ns** (P7 primitive met).
+  `cargo xtask ci` GREEN.
+- **Phase 1b — Write-Ahead Log: NOT STARTED.** Next: LSN, append-only writer with batched fsync-on-commit,
+  reader, checkpoint/compaction, CRC32 per entry; recover 1M entries < 2 s (P8); `wal_reader` fuzz target.
+- **Phase 1c — Copy-on-write B-tree (MVCC):** follows 1b.
 
 ## How to build, test, gate
 

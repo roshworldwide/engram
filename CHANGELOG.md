@@ -6,6 +6,24 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 1a — Core types & MessagePack codec
+
+- `engram-core` now implements the full §5 data model: `MemoryId` (128-bit, ULID-style, time-sortable,
+  Crockford-base32 `Display`/`FromStr`, format-aware serde), `AgentId`/`AgentInstanceId`/`SessionId`,
+  `Timestamp`, the `EventType`/`EdgeType` taxonomies, and the four record types
+  (`EpisodicRecord`/`SemanticRecord`/`ProceduralRecord`/`WorkingMemoryRecord`) plus `CausalEdge`.
+- Injectable determinism: `Clock` (`SystemClock`/`MockClock`) and `Rng` (`SplitMix64`/`SystemRng`) traits,
+  plus a monotonic `MemoryIdGenerator` that stays strictly increasing within a millisecond.
+- `DecayFunction::eval` (R4) — lazy, allocation-free confidence decay (exponential / regularized power-law /
+  step / none); measured at **1.1–5.3 ns** per call, well under the 500 ns P7 target.
+- MessagePack codec (`to_msgpack`/`from_msgpack`, named fields for schema evolution) and a `Record` trait
+  with stable `RecordKind` wire tags for Phase 1b WAL framing.
+- `thiserror`-based `EngramError`/`IdParseError`; no `unwrap`/`panic` on library paths.
+- Tests: 19 unit + 7 proptest properties (every record type round-trips; arbitrary bytes never panic;
+  id string + generator monotonicity) + 5 doctests.
+- `fuzz/` cargo-fuzz workspace with the `record_codec` target — builds on nightly; 2.1M-run local smoke,
+  0 crashes.
+
 ### Phase 0 — Scaffold & CI
 
 - Cargo workspace with eight crates: `engram-core`, `engram-storage`, `engram-consistency`, `engram-query`,
