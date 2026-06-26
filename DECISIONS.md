@@ -140,3 +140,25 @@ drove three fixes; recording them so the rationale isn't lost:
 The review also confirmed the B-tree's algorithmic-correctness and MVCC/concurrency dimensions had **no**
 defects, and correctly rejected two non-issues (`fdatasync` is sufficient for append growth; non-durable
 torn-tail truncation is harmless because recovery is CRC-gated).
+
+## ADR-0011 — Episodic store: four CoW B-tree indexes, eager indexing, allocator choice (Phase 2a)
+
+**Status:** accepted (Phase 2a).
+
+- **Four indexes over one shared `Arc<EpisodicRecord>`:** primary (`MemoryId`), by-session
+  (`(SessionId, MemoryId)`), by-time (`(valid_time, MemoryId)`), by-cause (`(cause_id, effect_id)`). Composite
+  keys are plain Rust tuples (lexicographically `Ord`) — no manual byte-packing. The single `Arc` means the
+  record is stored once and shared across indexes (refcount bumps, not copies).
+- **Eager indexing** (index on `append`, before `commit`): simplest and fastest (one pass; 295 K/414 K vs
+  ~250 K for a two-pass index-at-commit), and gives read-your-writes within the process. The trade-off — a
+  reader can briefly see cross-index skew during an append, and uncommitted appends are visible in-memory — is
+  documented; a true atomic cross-index snapshot is deferred to the ACC layer (Phase 3). A parallel
+  index-at-commit was prototyped and **rejected**: the CoW node churn is allocation-bound and three threads
+  contend on the system allocator, making it slower than eager, not faster.
+- **Allocator, not algorithm, is the write bottleneck.** Profiling showed the CoW path-clone is allocation-
+  bound; the throughput bench therefore links **mimalloc** (the allocator a production binary uses), which
+  takes P2 from 295 K (system) to 414 K. This is an honest tuning choice, not a benchmark trick — `fsync` is
+  never disabled, and both allocator numbers are reported in `BENCHMARKS.md`.
+- **Append-only is enforced**, not assumed: a duplicate id is rejected (`StorageError::Duplicate`) under the
+  writer lock before any WAL write, because the secondary indexes are insert-only (the CoW B-tree has no
+  delete) and would otherwise accumulate phantom keys. Surfaced and fixed by the Phase 2a adversarial review.

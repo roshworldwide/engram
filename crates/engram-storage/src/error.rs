@@ -20,4 +20,8 @@ pub enum StorageError {
     /// A WAL invariant was violated.
     #[error("wal: {0}")]
     Wal(String),
+
+    /// An append-only store was given an id that already exists.
+    #[error("duplicate memory id: {0}")]
+    Duplicate(engram_core::MemoryId),
 }

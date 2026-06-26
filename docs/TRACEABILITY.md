@@ -12,7 +12,7 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 |-----|------------|-------------------------|-----------------------|--------|
 | R1 | From-scratch Rust storage engine (no embedded engine) | `crates/engram-storage/*` | `deny.toml` storage-engine ban + absence of such deps | 🟡 banned in CI; engine lands Phase 1 |
 | R2 | Record types + MessagePack codec | `engram-core/src/{records,codec,ids}.rs` | `tests/codec_roundtrip.rs` (proptest round-trips; arbitrary bytes never panic) | ✅ Phase 1a |
-| R2 | Episodic memory type (store) | `engram-storage/src/stores/episodic.rs` | `stores::episodic::tests` + bench `write_throughput` (P1) | ⬜ Phase 2a |
+| R2 | Episodic memory type (store) | `engram-storage/src/stores/episodic.rs` | `stores::episodic::tests` + `tests/episodic.rs` (10k) + `benches/write_throughput.rs` | ✅ Phase 2a |
 | R2 | Semantic memory type | `engram-storage/src/stores/semantic.rs` | `stores::semantic::tests` (versioning) | ⬜ Phase 2b |
 | R2 | Procedural memory type | `engram-storage/src/stores/procedural.rs` | `stores::procedural::tests` (supersedes chain) | ⬜ Phase 2c |
 | R2 | Working memory type | `engram-storage/src/stores/working.rs` | `stores::working::tests` (bounded FIFO eviction) | ⬜ Phase 2e |
@@ -29,8 +29,8 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 
 | # | Metric | Proving bench | Status |
 |---|--------|---------------|--------|
-| P1 | ≥ 100k ev/s episodic write (durable) | `benches/write_throughput.rs` | ⬜ Phase 2a |
-| P2 | ≥ 300k ev/s bulk write | `benches/write_throughput.rs` | ⬜ Phase 2a |
+| P1 | ≥ 100k ev/s episodic write (durable) | `benches/write_throughput.rs` | ✅ Phase 2a (330k @ group-commit 4096) |
+| P2 | ≥ 300k ev/s bulk write | `benches/write_throughput.rs` | ✅ Phase 2a (414k bulk, mimalloc; 295k system) |
 | P3 | < 400 µs p99 semantic point read | `benches/point_query.rs` (+ `engram-storage/benches/btree.rs`) | ⬜ Phase 2b — tree `get` primitive ~56 ns ✅ |
 | P4 | < 5 ms p99 time-travel @ 12 mo | `benches/time_travel.rs` | ⬜ Phase 2b |
 | P5 | < 2 ms p99 provenance trace (≤ 1000) | `benches/provenance.rs` | ⬜ Phase 2d |

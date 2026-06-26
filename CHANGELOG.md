@@ -6,6 +6,25 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 2a — Episodic store
+
+- `engram-storage::stores::episodic::EpisodicStore` — immutable, append-only events (R2) on the WAL
+  (durability) + four CoW B-tree indexes over a shared `Arc<EpisodicRecord>`: **primary** (`MemoryId`),
+  **by-session** (`(SessionId, MemoryId)`), **by-time** (`(valid_time, MemoryId)`), and **by-cause**
+  (`(cause_id, effect_id)` — the seed of the causal-provenance DAG, R5). API: `append`/`commit`/
+  `append_committed`, `get`, `scan_session`, `scan_time_range` (half-open `[lo, hi)` by valid-time),
+  `effects_of`. `open` replays the committed redo set; uncommitted tail events are dropped.
+- Append-only contract enforced: re-appending an existing id returns `StorageError::Duplicate` (prevents
+  phantom secondary-index entries). `Recovered` gained `max_tx_id` so a reopened store resumes tx ids above
+  every id on disk (keeps position-aware redo sound).
+- Tests: 6 unit + a 10k-event integration test (exact time slices, session isolation, full recovery).
+- **P1 met:** 330 K ev/s durable at group-commit 4096 (169 K @ 1024); **P2 met:** 414 K ev/s bulk (mimalloc).
+  Small-batch P1 is macOS-`fsync`-bound; the CoW write path is allocation-bound, so the throughput bench links
+  mimalloc (system-allocator P2 is 295 K, logged honestly).
+- Hardened by an adversarial review (recovery/index/concurrency/API dimensions, each finding verified):
+  recovery and concurrency came back sound; fixed duplicate-id phantom entries and added decode-error context
+  + a cross-index-visibility consistency note (atomic cross-index snapshot deferred to ACC).
+
 ### Phase 1c — Copy-on-write B-tree (MVCC)
 
 - `engram-storage::btree` — `CowBTree<K, V>`, a persistent copy-on-write B-tree (R6). Writes clone only the

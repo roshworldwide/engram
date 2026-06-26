@@ -29,10 +29,12 @@
 
 pub mod btree;
 pub mod error;
+pub mod stores;
 pub mod wal;
 
 pub use btree::{CowBTree, Iter, Snapshot};
 pub use error::{Result, StorageError};
+pub use stores::EpisodicStore;
 pub use wal::{scan_bytes, Recovered, Wal, WalEntry, WalOp};
 
 /// The semantic version of the Engram storage crate.

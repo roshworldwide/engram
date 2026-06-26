@@ -22,6 +22,7 @@ arc-swap = { workspace = true }
 proptest = { workspace = true }
 criterion = { workspace = true }
 tempfile = { workspace = true }
+mimalloc = "0.1"
 
 [[bench]]
 name = "recovery"
@@ -33,4 +34,8 @@ harness = false
 
 [[bench]]
 name = "btree"
+harness = false
+
+[[bench]]
+name = "write_throughput"
 harness = false

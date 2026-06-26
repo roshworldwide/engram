@@ -104,6 +104,11 @@ pub struct Recovered {
     pub next_lsn: u64,
     /// Byte length of the valid prefix (a torn tail beyond this is ignored).
     pub valid_len: u64,
+    /// The highest `tx_id` seen across *all* valid frames (committed or not). A
+    /// writer that resumes the log must assign tx ids strictly above this so it
+    /// never reuses a tx id still present on disk (which position-aware redo
+    /// would otherwise be vulnerable to).
+    pub max_tx_id: u64,
 }
 
 /// The outcome of scanning a byte stream for frames.
@@ -237,6 +242,7 @@ impl Wal {
                 *slot = (*slot).max(e.lsn);
             }
         }
+        let max_tx_id = scan.entries.iter().map(|e| e.tx_id).max().unwrap_or(0);
         let entries = scan
             .entries
             .into_iter()
@@ -246,6 +252,7 @@ impl Wal {
             entries,
             next_lsn,
             valid_len: scan.valid_len,
+            max_tx_id,
         })
     }
 

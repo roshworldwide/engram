@@ -36,10 +36,18 @@ quick-orientation companion to it.
   **Gate met: 1M random inserts + sorted scan ~1.1 s; old snapshots readable while writer advances.**
   `get` ~56 ns. An adversarial multi-agent review found the B-tree correctness/MVCC dimensions clean and led
   to 3 fixes (WAL dir-fsync, position-aware recovery, removed a hot-path Arc clone). `cargo xtask ci` GREEN.
-- **Phase 2 — The four stores + causal DAG: NOT STARTED.** Next: episodic store on B-tree+WAL with
-  primary/session/causal indexes (2a, bench P1/P2); bitemporal semantic store with lazy decay on read (2b,
-  bench P3/P4/P7); procedural store (2c); causal-DAG store + `find_provenance_chain` + cycle rejection (2d,
-  bench P5, `dag_decode` fuzz); bounded working memory (2e).
+- **Phase 2a — Episodic store: COMPLETE.** `engram-storage::stores::episodic::EpisodicStore` on the WAL +
+  four CoW B-tree indexes (primary / by-session / by-time / by-cause) over a shared `Arc<EpisodicRecord>`.
+  `append`/`commit`/`get`/`scan_session`/`scan_time_range`/`effects_of`; `open` replays the committed redo
+  set. Append-only contract enforced (duplicate id rejected). 6 unit + 10k integration test. **P1 met (330k
+  @ group-commit 4096), P2 met (414k bulk, mimalloc).** `Recovered` gained `max_tx_id`. Adversarial review
+  fixed duplicate-id phantom entries + doc/diagnostics; recovery/concurrency confirmed sound. CI GREEN.
+- **Phase 2b — Semantic store (bitemporal + lazy decay): NOT STARTED.** Next: `upsert_belief`,
+  `retract_belief`, `query_at_time`; versioned bitemporal records; confidence decay on read. Bench P3
+  (< 400 µs p99 point read), P4 (< 5 ms p99 @ 12 mo), P7 (full read-path). Then 2c procedural, 2d causal-DAG
+  (`find_provenance_chain`, cycle rejection, bench P5, `dag_decode` fuzz), 2e working memory.
+- **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
+  Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 
 ## How to build, test, gate
 

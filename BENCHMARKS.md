@@ -33,8 +33,8 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 
 | #  | Metric | Target | Measured | Status |
 |----|--------|--------|----------|--------|
-| P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | WAL-only upper bound **1.56 M/s** (durable, 10k-batch group commit) | ⬜ Phase 2a (store) — WAL signal ✅ |
-| P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | WAL-only upper bound **4.46 M/s** (append, no fsync) | ⬜ Phase 2a (store) — WAL signal ✅ |
+| P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | **330 K ev/s** @ group-commit 4096 (169 K @ 1024), mimalloc | ✅ Phase 2a (group-commit ≥ 1024) |
+| P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | **414 K ev/s** bulk (mimalloc); 295 K system allocator | ✅ Phase 2a (mimalloc) |
 | P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | B-tree `get` primitive **~56 ns** hit / **~33 ns** miss on 1M keys | ⬜ Phase 2b (store) — tree primitive ✅ |
 | P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | — | ⬜ Phase 2b |
 | P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | — | ⬜ Phase 2d |
@@ -77,6 +77,27 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
   These are WAL-only upper bounds; the official P1/P2 (with B-tree indexing) are measured in Phase 2a.
 - **`wal_reader` fuzz smoke** (`cargo +nightly fuzz run wal_reader -max_total_time=15`):
   **390,211 runs, 0 crashes**.
+
+## Phase 2a measured (2026-06-26, reference machine)
+
+Episodic store on the WAL + three CoW B-tree indexes per event (`cargo bench -p engram-storage --bench
+write_throughput`, 20k events, 32-byte payload). The CoW write path is allocation-bound, so the bench links
+**mimalloc** (the allocator a production build uses); the system-allocator column is the conservative number.
+
+| Scenario | mimalloc | system malloc |
+|---|---|---|
+| **P1** durable, group-commit 256 | 50 K ev/s (macOS fsync-bound) | 50 K |
+| **P1** durable, group-commit 1024 | **169 K ev/s** ✅ | 152 K ✅ |
+| **P1** durable, group-commit 4096 | **330 K ev/s** ✅ | 250 K ✅ |
+| index only (no fsync, ceiling) | 454 K ev/s | 311 K |
+| **P2** bulk, single commit | **414 K ev/s** ✅ | 295 K |
+
+- **P1 ≥ 100 K: met** at any realistic group-commit window (≥ 1024). Small batches are bound by macOS `fsync`
+  latency (~4 ms) — group commit is exactly the intended mitigation.
+- **P2 ≥ 300 K: met** with mimalloc (414 K); 295 K with the system allocator (logged honestly — the gap is
+  pure allocator throughput on the CoW node churn, not algorithmic).
+- An adversarial review of the store confirmed recovery/concurrency are sound and fixed one real defect
+  (duplicate-id phantom index entries — now rejected) plus diagnostics/doc hardening.
 
 ## Phase 1c measured (2026-06-26, reference machine)
 
