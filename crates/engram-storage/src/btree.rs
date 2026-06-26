@@ -122,6 +122,13 @@ impl<K: Ord + Clone, V: Clone> CowBTree<K, V> {
         get_in(&self.state.load().root, key)
     }
 
+    /// The entry with the greatest key `≤ key` (the "floor"), if any. `O(log n)`.
+    /// Useful for as-of queries: find the version live at a point in time.
+    #[must_use]
+    pub fn floor(&self, key: &K) -> Option<(K, V)> {
+        floor_in(&self.state.load().root, key)
+    }
+
     /// Insert or update `key`, returning the previous value if it existed.
     ///
     /// Writers are serialized internally; readers never block.
@@ -206,6 +213,12 @@ impl<K: Ord + Clone, V: Clone> Snapshot<K, V> {
         get_in(&self.inner.root, key)
     }
 
+    /// The entry with the greatest key `≤ key` in this snapshot, if any.
+    #[must_use]
+    pub fn floor(&self, key: &K) -> Option<(K, V)> {
+        floor_in(&self.inner.root, key)
+    }
+
     /// Iterate this snapshot in ascending key order.
     #[must_use]
     pub fn iter(&self) -> Iter<K, V> {
@@ -254,6 +267,29 @@ fn get_in<K: Ord, V: Clone>(node: &Node<K, V>, key: &K) -> Option<V> {
             Err(i) => {
                 if node.is_leaf() {
                     return None;
+                }
+                node = node.children[i].as_ref();
+            }
+        }
+    }
+}
+
+/// Descend from `node` tracking the greatest key `≤ target` seen so far. At each
+/// node the largest key strictly below `target` is `keys[i-1]` (where `i` is the
+/// insertion point); descending `children[i]` may find a still-larger candidate
+/// in `(keys[i-1], target)`, so `best` is overwritten on the way down.
+fn floor_in<K: Ord + Clone, V: Clone>(node: &Node<K, V>, target: &K) -> Option<(K, V)> {
+    let mut best: Option<(K, V)> = None;
+    let mut node = node;
+    loop {
+        match node.keys.binary_search(target) {
+            Ok(i) => return Some((node.keys[i].clone(), node.vals[i].clone())),
+            Err(i) => {
+                if i > 0 {
+                    best = Some((node.keys[i - 1].clone(), node.vals[i - 1].clone()));
+                }
+                if node.is_leaf() {
+                    return best;
                 }
                 node = node.children[i].as_ref();
             }
@@ -529,6 +565,21 @@ mod tests {
         // Inclusive / unbounded variants.
         let inc: Vec<u32> = t.range(10..=20).map(|(k, _)| k).collect();
         assert_eq!(inc, (10..=20).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn floor_finds_greatest_le() {
+        let t = CowBTree::new();
+        for k in [10u32, 20, 30, 40] {
+            t.insert(k, k * 100);
+        }
+        assert_eq!(t.floor(&25), Some((20, 2000))); // between keys
+        assert_eq!(t.floor(&30), Some((30, 3000))); // exact
+        assert_eq!(t.floor(&40), Some((40, 4000))); // last
+        assert_eq!(t.floor(&100), Some((40, 4000))); // above all
+        assert_eq!(t.floor(&5), None); // below all
+        let empty: CowBTree<u32, u32> = CowBTree::new();
+        assert_eq!(empty.floor(&1), None);
     }
 
     #[test]

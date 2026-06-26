@@ -6,6 +6,27 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 2b — Semantic store (bitemporal + lazy decay)
+
+- `CowBTree::floor` — the greatest entry `≤ key` in `O(log n)` (the as-of primitive), with a unit test and a
+  `BTreeMap` differential-proptest check.
+- `engram-storage::stores::semantic::SemanticStore` — mutable, bitemporal, versioned beliefs (R2/R3) with
+  lazy confidence decay (R4). Each `upsert`/`retract` appends a new **version** keyed
+  `(subject, predicate, tx_from)`; transaction-time is monotonic; "what was believed as-of T" is a single
+  `floor` lookup. API: `upsert_belief`, `retract_belief`, `current`, `get_at_tx` (time-travel), `history`,
+  `get_by_id`, `commit`; injectable `Clock`. Reads return a `BeliefView` whose confidence is decayed on read
+  (no stored decayed value, no background task).
+- Tests: 6 unit (10-edit history retained + time-travel to each version, decay monotonicity on read, retract
+  hides current but keeps history, recovery, tx-time monotonicity after retract-then-reopen).
+- **P3 met (~318 ns current point read), P4 met (~162 ns time-travel @ 200 versions), P7 met (~191 ns full
+  decay-on-read; eval ≈ 3 ns)** — all 2–4 orders of magnitude under target.
+- Hardened by an adversarial review (bitemporal/recovery/decay/concurrency, each finding verified): fixed a
+  **non-atomic upsert** (a mid-write error could silently lose a live belief; now all WAL work precedes any
+  index update, with a poisoned-writer guard so a half-written batch can't be committed) and a **recovery
+  water-mark** that ignored `tx_until` (a rewound clock after retract+reopen could mint a version inside a
+  closed interval; now both endpoints are covered, with a regression test). Documented per-tree cross-index
+  visibility (atomic snapshot deferred to ACC). Two findings were correctly rejected.
+
 ### Phase 2a — Episodic store
 
 - `engram-storage::stores::episodic::EpisodicStore` — immutable, append-only events (R2) on the WAL

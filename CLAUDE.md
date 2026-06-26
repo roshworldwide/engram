@@ -42,10 +42,16 @@ quick-orientation companion to it.
   set. Append-only contract enforced (duplicate id rejected). 6 unit + 10k integration test. **P1 met (330k
   @ group-commit 4096), P2 met (414k bulk, mimalloc).** `Recovered` gained `max_tx_id`. Adversarial review
   fixed duplicate-id phantom entries + doc/diagnostics; recovery/concurrency confirmed sound. CI GREEN.
-- **Phase 2b — Semantic store (bitemporal + lazy decay): NOT STARTED.** Next: `upsert_belief`,
-  `retract_belief`, `query_at_time`; versioned bitemporal records; confidence decay on read. Bench P3
-  (< 400 µs p99 point read), P4 (< 5 ms p99 @ 12 mo), P7 (full read-path). Then 2c procedural, 2d causal-DAG
-  (`find_provenance_chain`, cycle rejection, bench P5, `dag_decode` fuzz), 2e working memory.
+- **Phase 2b — Semantic store (bitemporal + lazy decay): COMPLETE.** `SemanticStore` — versioned beliefs
+  keyed `(subject, predicate, tx_from)`, monotonic transaction-time, `CowBTree::floor`-based as-of queries.
+  `upsert_belief`/`retract_belief`/`current`/`get_at_tx`/`history`/`get_by_id`; lazy decay-on-read
+  (`BeliefView`); injectable `Clock`. 6 unit tests. **P3 ~318 ns, P4 ~162 ns @ 200 versions, P7 ~191 ns full
+  read — all met.** Adversarial review fixed a non-atomic upsert (live-belief loss on mid-write error, now
+  poisoned-writer guarded) and a recovery water-mark ignoring `tx_until`. CI GREEN.
+- **Phase 2c/2d/2e — Procedural / Causal-DAG / Working memory: NOT STARTED.** Next: 2c procedural store
+  (versioned skills, `supersedes` chain); 2d causal-DAG store (adjacency + reverse index, `add_edge`,
+  `get_causes`/`get_effects`, `find_provenance_chain` BFS/DFS, **cycle rejection**, bench P5, `dag_decode`
+  fuzz); 2e bounded working memory (FIFO cap 50, eviction→consolidation hook). Then Phase 3 (ACC).
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

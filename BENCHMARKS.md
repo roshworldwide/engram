@@ -35,11 +35,11 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 |----|--------|--------|----------|--------|
 | P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | **330 K ev/s** @ group-commit 4096 (169 K @ 1024), mimalloc | ✅ Phase 2a (group-commit ≥ 1024) |
 | P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | **414 K ev/s** bulk (mimalloc); 295 K system allocator | ✅ Phase 2a (mimalloc) |
-| P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | B-tree `get` primitive **~56 ns** hit / **~33 ns** miss on 1M keys | ⬜ Phase 2b (store) — tree primitive ✅ |
-| P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | — | ⬜ Phase 2b |
+| P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | **~318 ns** median (incl. a `clock.now()` syscall) | ✅ Phase 2b (~250× under p50) |
+| P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | **~162 ns** median (200-version `floor`) | ✅ Phase 2b |
 | P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | — | ⬜ Phase 2d |
 | P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | — | ⬜ Phase 3b |
-| P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | **eval primitive 1.1–5.3 ns p50** (exp 3.0, pow 5.3, step 1.2, none 1.1) | 🟡 primitive ✅; full read-path Phase 2b |
+| P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | eval primitive 1.1–5.3 ns; **full decay-on-read point query ~191 ns**, zero background CPU | ✅ Phase 2b |
 | P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | **128 ms median** (p99 ≈ 136 ms), 100% committed recovered | ✅ Phase 1b (~15× under) |
 | Q4 | Time-travel vs. hand-built PostgreSQL bitemporal schema | ≥ 10× faster | — | ⬜ Phase 4c |
 
@@ -98,6 +98,23 @@ write_throughput`, 20k events, 32-byte payload). The CoW write path is allocatio
   pure allocator throughput on the CoW node churn, not algorithmic).
 - An adversarial review of the store confirmed recovery/concurrency are sound and fixed one real defect
   (duplicate-id phantom index entries — now rejected) plus diagnostics/doc hardening.
+
+## Phase 2b measured (2026-06-26, reference machine)
+
+Bitemporal semantic store (`cargo bench -p engram-storage --bench semantic_read`, 50k single-version beliefs
++ one 200-version belief, mimalloc):
+
+| Metric | Target | Measured (median) |
+|---|---|---|
+| **P3** current point read | < 400 µs p99 / < 80 µs p50 | **~318 ns** (includes a `clock.now()` syscall) |
+| **P4** time-travel into a 200-version belief | < 5 ms p99 | **~162 ns** (`floor` over the version chain) |
+| **P7** decay-on-read point query | < 500 ns/belief | **~191 ns** full read (decay eval ≈ 3 ns of it) |
+
+All three clear their targets by 2–4 orders of magnitude: the `O(log n)` `floor` lookup plus a ~3 ns lazy
+`DecayFunction::eval` makes time-travel and current reads effectively free. Decay is computed only on read
+(zero background CPU). An adversarial review found and fixed two real bugs: a non-atomic upsert that could
+lose a live belief on a mid-write error, and a recovery water-mark that ignored `tx_until` (a rewound clock
+after a retract+reopen could mint a version inside a closed interval).
 
 ## Phase 1c measured (2026-06-26, reference machine)
 

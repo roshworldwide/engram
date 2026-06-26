@@ -162,3 +162,29 @@ torn-tail truncation is harmless because recovery is CRC-gated).
 - **Append-only is enforced**, not assumed: a duplicate id is rejected (`StorageError::Duplicate`) under the
   writer lock before any WAL write, because the secondary indexes are insert-only (the CoW B-tree has no
   delete) and would otherwise accumulate phantom keys. Surfaced and fixed by the Phase 2a adversarial review.
+
+## ADR-0012 — Semantic store: transaction-time version chain, `floor`-based as-of, lazy decay (Phase 2b)
+
+**Status:** accepted (Phase 2b).
+
+- **Versioning by a transaction-time chain.** Each `(subject, predicate)` is a sequence of versions keyed
+  `(subject, predicate, tx_from)`; an upsert stamps a new version `tx_from = now` and closes the prior with
+  `tx_until = now`. Transaction-time is made **strictly monotonic** in the store (`now.max(last_tx + 1)`), so
+  two versions never collide on a key and the chain is contiguous. "What was believed as-of `T`" is then a
+  single `CowBTree::floor((subject, predicate, T))` plus a `tx_until > T` check — `O(log n)`, measured
+  ~160–320 ns even at 50k beliefs / 200 versions. Chosen over a per-belief version vector or a separate
+  history table because it reuses the one B-tree primitive and makes time-travel a point lookup, not a scan.
+- **Valid-time is stored but as-of queries are transaction-time.** Records carry both temporal intervals
+  (R3), and retract closes valid-time too; the headline `get_at_tx` answers "what was *believed* as-of T"
+  (transaction-time). Full valid-time-axis history (the bitemporal "trapezoid": multiple valid-time records
+  per tx snapshot) is intentionally deferred — the transaction-time chain satisfies R3's "as-of" semantics
+  and the 10-versions-retrievable contract.
+- **Decay is lazy and on-read (P7).** Confidence is never stored decayed and no scheduler exists; reads return
+  a `BeliefView` whose confidence is `DecayFunction::eval`uated (~3 ns) at the query's evaluation time. Zero
+  background CPU by construction.
+- **Writes are all-or-nothing in memory + can't half-commit.** An upsert closes-then-inserts two records; the
+  Phase 2b review showed a mid-write WAL error could leave the chain inconsistent. Fixed: all encoding/WAL
+  appends happen before any (infallible) index update, the new open version is published before the closed
+  predecessor (so a concurrent reader never sees the belief vanish), and a partial WAL append **poisons the
+  writer** so `commit` refuses — recovery then drops the orphaned, uncommitted frames. Recovery also folds
+  `tx_until` (not just `tx_from`) into the resumed monotonic clock so a retract+reopen can't regress tx-time.

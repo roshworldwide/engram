@@ -59,6 +59,13 @@ proptest! {
             let got_inc: Vec<(u16, u16)> = tree.range(lo..=hi).collect();
             let want_inc: Vec<(u16, u16)> = oracle.range(lo..=hi).map(|(k, v)| (*k, *v)).collect();
             prop_assert_eq!(got_inc, want_inc);
+
+            // floor(k) must equal the greatest entry <= k.
+            for k in [lo, hi] {
+                let got = tree.floor(&k);
+                let want = oracle.range(..=k).next_back().map(|(k, v)| (*k, *v));
+                prop_assert_eq!(got, want);
+            }
         }
 
         // Snapshot isolation: a snapshot is unchanged by subsequent writes.
