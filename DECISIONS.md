@@ -100,3 +100,43 @@ surface to one well-tested place.
 - **`record` stored raw, not interpreted at the WAL layer.** The WAL is a durable, ordered, checksummed byte
   log; routing `record` bytes to the right store on replay (via `WalOp`'s `RecordKind`) is the stores' job
   (Phase 2). This keeps the WAL reusable across all four memory types.
+
+## ADR-0009 — `Arc`-based persistent copy-on-write B-tree for MVCC (Phase 1c)
+
+**Status:** accepted (Phase 1c).
+
+We implement the B-tree as a **persistent (immutable) structure**: nodes are `Arc<Node>`, a write clones only
+the root→leaf path it touches and reuses every other subtree, and the `(root, len)` state is published with a
+single atomic `arc_swap::ArcSwap` store. Chosen over an mmap'd paged on-disk B-tree for Phase 1c because:
+
+- It is **fully safe Rust** (no `unsafe`), so MVCC correctness is easy to audit and test.
+- **MVCC falls out for free:** a `Snapshot` is just a retained `Arc` to an old root; readers are lock-free
+  (an `ArcSwap` load) and see an immutable version that never mutates underneath them. Writers are serialized
+  by a `Mutex` (the engine writes through the WAL, one at a time); reads never block.
+- Structural sharing keeps per-insert work to `O(B · height)` node copies (B = 32 ⇒ height ≈ 4 at 1M keys).
+
+The trade-off — the tree lives on the heap, not in an mmap'd page file — is acceptable for now; a paged
+on-disk representation (where the storage crate's allowed `unsafe` would live, for zero-copy reads) is
+revisited in Phase 2 if the P3/P4 latency targets need it. The WAL already provides durability; this tree is
+the in-memory index the WAL replays into.
+
+## ADR-0010 — Durability hardening from the Phase 1c adversarial review
+
+**Status:** accepted (Phase 1c).
+
+A multi-agent adversarial review (5 dimensions, each finding independently verified by a separate skeptic)
+drove three fixes; recording them so the rationale isn't lost:
+
+- **Parent-directory `fsync`** on `Wal::create` and after the `Wal::compact` rename (Unix). A file `fsync`
+  (`fdatasync`) persists the file's bytes/size but **not** its directory entry; without a directory `fsync` a
+  freshly created WAL or a compaction rename can vanish on power loss even though committed bytes were
+  flushed. This is required for the durability claim to hold against real crashes, not just process kills.
+- **Position-aware recovery.** `recover` now redoes a data entry only if a `Commit` for the same `tx_id`
+  exists at a strictly greater LSN (was: membership in a global committed-tx set). This stays correct even if
+  a caller reuses a `tx_id` after it commits — the reused, uncommitted entries are dropped.
+- **Removed a per-element `Arc` clone** in the B-tree scan iterator (it existed only to satisfy the borrow
+  checker); the iterator now clones only the child `Arc` on descent.
+
+The review also confirmed the B-tree's algorithmic-correctness and MVCC/concurrency dimensions had **no**
+defects, and correctly rejected two non-issues (`fdatasync` is sufficient for append growth; non-durable
+torn-tail truncation is harmless because recovery is CRC-gated).

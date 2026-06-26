@@ -21,8 +21,15 @@
 //! transaction has a durable `Commit` marker — the redo set — so a crash that
 //! tore the tail mid-transaction loses exactly that transaction and nothing
 //! committed before it.
+//!
+//! On Unix, [`Wal::create`] and [`Wal::compact`] additionally `fsync` the parent
+//! directory so a newly created file or a compaction rename is durably linked (a
+//! file `fsync` alone does not persist the directory entry). Recovery is
+//! position-aware — a data entry is redone only if its transaction has a `Commit`
+//! at a strictly greater LSN — so reusing a `tx_id` after it commits is safe
+//! (the reused, uncommitted entries are simply dropped).
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -126,6 +133,7 @@ impl Wal {
         writer.write_all(MAGIC)?;
         writer.write_all(&FORMAT_VERSION.to_le_bytes())?;
         writer.flush()?; // make the (empty) WAL a valid file on disk immediately
+        sync_parent_dir(&path)?; // durably link the new file into its directory
         Ok(Wal {
             file: writer,
             path,
@@ -218,16 +226,21 @@ impl Wal {
             .map(|e| e.lsn)
             .max()
             .map_or(0, |m| m + 1);
-        let committed: HashSet<u64> = scan
-            .entries
-            .iter()
-            .filter(|e| matches!(e.op, WalOp::Commit))
-            .map(|e| e.tx_id)
-            .collect();
+        // Position-aware redo: a data entry counts as committed only if a Commit
+        // for the same tx_id exists at a strictly greater LSN. This stays correct
+        // even if a tx_id is reused after committing — the reused, uncommitted
+        // entries have no later Commit and are dropped.
+        let mut commit_lsn: HashMap<u64, u64> = HashMap::new();
+        for e in &scan.entries {
+            if matches!(e.op, WalOp::Commit) {
+                let slot = commit_lsn.entry(e.tx_id).or_insert(e.lsn);
+                *slot = (*slot).max(e.lsn);
+            }
+        }
         let entries = scan
             .entries
             .into_iter()
-            .filter(|e| e.op.is_data() && committed.contains(&e.tx_id))
+            .filter(|e| e.op.is_data() && commit_lsn.get(&e.tx_id).is_some_and(|&c| c > e.lsn))
             .collect();
         Ok(Recovered {
             entries,
@@ -268,6 +281,7 @@ impl Wal {
             writer.get_ref().sync_data()?;
         }
         std::fs::rename(&tmp, &self.path)?;
+        sync_parent_dir(&self.path)?; // make the rename durable
 
         let mut file = OpenOptions::new().read(true).write(true).open(&self.path)?;
         file.seek(SeekFrom::End(0))?;
@@ -282,6 +296,26 @@ impl Drop for Wal {
         // not silently drop a tail. Durability still requires an explicit sync.
         let _ = self.file.flush();
     }
+}
+
+/// Fsync the directory containing `path` so a freshly created file or a rename
+/// is durably linked. POSIX requires a directory `fsync` for the directory entry
+/// to survive a crash — separate from fsyncing the file's contents.
+#[cfg(unix)]
+fn sync_parent_dir(path: &Path) -> Result<()> {
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    File::open(dir)?.sync_all()?;
+    Ok(())
+}
+
+/// Non-Unix platforms expose no portable directory `fsync`; durability of the
+/// directory entry is left to the filesystem.
+#[cfg(not(unix))]
+fn sync_parent_dir(_path: &Path) -> Result<()> {
+    Ok(())
 }
 
 /// Encode the CRC-covered region `[meta_len][meta][record]`.
@@ -440,6 +474,26 @@ mod tests {
             assert_eq!(e.record, format!("rec{i}").into_bytes());
         }
         assert_eq!(recovered.next_lsn, 101); // 100 puts + 1 commit
+    }
+
+    #[test]
+    fn reused_tx_id_after_commit_is_not_replayed() {
+        let (_d, path) = wal_path();
+        {
+            let mut wal = Wal::create(&path).unwrap();
+            wal.append(7, WalOp::Put(K), b"first").unwrap();
+            wal.commit(7).unwrap(); // tx 7 committed
+                                    // tx_id 7 reused for durable-but-uncommitted writes after its commit.
+            wal.append(7, WalOp::Put(K), b"second").unwrap();
+            wal.sync().unwrap();
+        }
+        let recovered = Wal::recover(&path).unwrap();
+        let recs: Vec<&[u8]> = recovered
+            .entries
+            .iter()
+            .map(|e| e.record.as_slice())
+            .collect();
+        assert_eq!(recs, vec![b"first".as_slice()]); // "second" is post-commit, not redone
     }
 
     #[test]

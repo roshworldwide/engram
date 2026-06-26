@@ -35,7 +35,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 |----|--------|--------|----------|--------|
 | P1 | Single-thread episodic write throughput (durable, fsync-batched) | ≥ 100,000 ev/s | WAL-only upper bound **1.56 M/s** (durable, 10k-batch group commit) | ⬜ Phase 2a (store) — WAL signal ✅ |
 | P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | WAL-only upper bound **4.46 M/s** (append, no fsync) | ⬜ Phase 2a (store) — WAL signal ✅ |
-| P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | — | ⬜ Phase 2b |
+| P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | B-tree `get` primitive **~56 ns** hit / **~33 ns** miss on 1M keys | ⬜ Phase 2b (store) — tree primitive ✅ |
 | P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | — | ⬜ Phase 2b |
 | P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | — | ⬜ Phase 2d |
 | P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | — | ⬜ Phase 3b |
@@ -48,7 +48,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | #  | Gate | Target | Status |
 |----|------|--------|--------|
 | Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ⬜ Phase 3b |
-| Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k local smoke, **0 crashes**; full 10M nightly + 2 remaining targets (btree_ops/dag_decode) pending |
+| Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M local smoke, **0 crashes**; full 10M nightly + `dag_decode` (Phase 2d) pending |
 | Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | ⬜ Phase 4 |
 | Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ⬜ Phase 3b |
 | Q6 | Clippy / rustfmt / `cargo test` / `cargo deny` | green every commit, clippy `-D warnings` | ✅ (all four green locally + in CI) |
@@ -77,3 +77,17 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
   These are WAL-only upper bounds; the official P1/P2 (with B-tree indexing) are measured in Phase 2a.
 - **`wal_reader` fuzz smoke** (`cargo +nightly fuzz run wal_reader -max_total_time=15`):
   **390,211 runs, 0 crashes**.
+
+## Phase 1c measured (2026-06-26, reference machine)
+
+- **1c gate — 1,000,000 random-order inserts + full sorted scan** (`cargo test --release --lib
+  one_million_keys -- --ignored`): **~1.1 s** end-to-end; the scan is strictly ascending and complete, and
+  old snapshots remain fully readable while the writer advances (MVCC).
+- **B-tree `get`** on a 1M-key tree (`cargo bench -p engram-storage --bench btree`): hit **~56 ns**,
+  miss **~33 ns**.
+- **`btree_ops` fuzz smoke** (differential vs `std::collections::BTreeMap`): **>1.1M runs across two sessions,
+  0 crashes**, no behavioral divergence.
+- **Adversarial review:** a 5-dimension multi-agent review (each finding independently verified) found the
+  B-tree's correctness and MVCC/concurrency dimensions clean, and three real WAL/iterator issues that were
+  fixed: parent-directory `fsync` on `create`/`compact`, position-aware recovery (tx_id-reuse safe), and a
+  removed per-element `Arc` clone on the scan hot path.

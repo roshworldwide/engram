@@ -30,9 +30,16 @@ quick-orientation companion to it.
   redo set), `open` (torn-tail truncation), `compact` (atomic checkpoint). 9 unit + 4 proptest + 1 doctest;
   `wal_reader` fuzz (390k smoke, 0 crashes). **P8 met: recover 1M in ~128 ms** (target < 2 s); WAL append
   upper bound 1.56 M durable writes/s. `cargo xtask ci` GREEN.
-- **Phase 1c — Copy-on-write B-tree (MVCC): NOT STARTED.** Next: leaf+internal nodes, `insert`/`get`/
-  `range_scan`, copy-on-write write path with atomic root swap, readers pinned to a snapshot; 1M-key sorted
-  scan + old-root-readable-while-writer-advances test; `btree_ops` fuzz. The WAL durably backs writes.
+- **Phase 1c — Copy-on-write B-tree (MVCC): COMPLETE.** `engram-storage::btree::CowBTree` — persistent CoW
+  B-tree, path-clone + atomic `arc-swap` root, lock-free reads, `Snapshot` MVCC. `insert`/`get`/`range`/
+  `iter`/`snapshot`/`len`. 7 unit + `BTreeMap` differential proptest + `btree_ops` fuzz + ignored 1M gate.
+  **Gate met: 1M random inserts + sorted scan ~1.1 s; old snapshots readable while writer advances.**
+  `get` ~56 ns. An adversarial multi-agent review found the B-tree correctness/MVCC dimensions clean and led
+  to 3 fixes (WAL dir-fsync, position-aware recovery, removed a hot-path Arc clone). `cargo xtask ci` GREEN.
+- **Phase 2 — The four stores + causal DAG: NOT STARTED.** Next: episodic store on B-tree+WAL with
+  primary/session/causal indexes (2a, bench P1/P2); bitemporal semantic store with lazy decay on read (2b,
+  bench P3/P4/P7); procedural store (2c); causal-DAG store + `find_provenance_chain` + cycle rejection (2d,
+  bench P5, `dag_decode` fuzz); bounded working memory (2e).
 
 ## How to build, test, gate
 

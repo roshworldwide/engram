@@ -16,6 +16,7 @@ engram-core = { workspace = true }
 serde = { workspace = true }
 crc32fast = { workspace = true }
 thiserror = { workspace = true }
+arc-swap = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
@@ -28,4 +29,8 @@ harness = false
 
 [[bench]]
 name = "wal_append"
+harness = false
+
+[[bench]]
+name = "btree"
 harness = false

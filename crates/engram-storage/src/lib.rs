@@ -27,9 +27,11 @@
 //! # let _ = std::fs::remove_file(&dir);
 //! ```
 
+pub mod btree;
 pub mod error;
 pub mod wal;
 
+pub use btree::{CowBTree, Iter, Snapshot};
 pub use error::{Result, StorageError};
 pub use wal::{scan_bytes, Recovered, Wal, WalEntry, WalOp};
 

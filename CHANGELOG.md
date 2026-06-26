@@ -6,6 +6,24 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 1c — Copy-on-write B-tree (MVCC)
+
+- `engram-storage::btree` — `CowBTree<K, V>`, a persistent copy-on-write B-tree (R6). Writes clone only the
+  touched root→leaf path (structural sharing) and swap the root atomically via `arc-swap`; reads are
+  lock-free. `Snapshot` pins a version for MVCC, so concurrent readers at independent snapshots are
+  unaffected by writers. API: `insert` (upsert), `get`, `range`, `iter`, `snapshot`, `len`, plus a seeking
+  range iterator.
+- Tests: 7 unit (split validity, MVCC snapshot isolation, concurrent-readers-during-writes) + a `BTreeMap`
+  differential proptest + an ignored 1M-key gate test. `btree_ops` cargo-fuzz target (differential vs
+  `BTreeMap`).
+- **1c gate met:** 1,000,000 random-order inserts + full sorted scan in **~1.1 s** (release); old snapshots
+  stay fully readable while the writer advances. `get` ~56 ns hit / ~33 ns miss on 1M keys.
+- **Hardened by an adversarial multi-agent review** (5 dimensions, each finding independently verified): the
+  B-tree's correctness and MVCC dimensions returned no findings; three fixes were applied — parent-directory
+  `fsync` on WAL `create`/`compact` (durable directory entry on Unix), position-aware WAL recovery (a reused
+  `tx_id` after commit can no longer replay uncommitted entries), and removal of a per-element `Arc` clone on
+  the B-tree scan hot path.
+
 ### Phase 1b — Write-Ahead Log
 
 - `engram-storage::wal` — an append-only, crash-safe WAL (R6): length-prefixed frames with a per-entry
