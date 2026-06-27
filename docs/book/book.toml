@@ -1,0 +1,10 @@
+[book]
+title = "Engram Architecture"
+authors = ["Engram contributors"]
+description = "How Engram — a from-scratch storage engine for AI-agent memory — is built."
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/engram-db/engram"

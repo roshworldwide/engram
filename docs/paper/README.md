@@ -1,6 +1,8 @@
 # Paper — *Engram: Agent Causal Consistency for AI-Agent Memory Storage*
 
-VLDB-2027-targeted paper skeleton (Phase 5a). Sections:
+**The full paper is [`engram.md`](engram.md)** (VLDB-2027-targeted). It contains the formal ACC contract,
+the efficiency theorem and its proof sketch, the evaluation table with real numbers, and the SRE case study.
+This file is the section outline:
 
 1. **Motivation** — why agent memory is not a database workload (fading, provenance, time-travel, sharing).
 2. **Memory-type taxonomy** — episodic / semantic / procedural / working.

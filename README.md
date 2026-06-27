@@ -7,10 +7,27 @@ conventional database — which stores facts that are true until overwritten —
 that **fades**, that knows **why** it believes things, that can be **rewound in time**, and that can be
 **safely shared between many concurrent agent instances**.
 
-> **Status:** Phase 0 complete — the workspace is scaffolded, fully wired for CI, and green
-> (`cargo xtask ci`). The storage engine, query layer, and consistency model are built test-first in the
-> phases that follow. See [`CLAUDE.md`](CLAUDE.md) for current state and [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md)
-> for the requirement → module → proving-test map.
+> **Status:** complete and green (`cargo xtask ci`). All nine requirements (R1–R9) are implemented; the
+> eight performance gates (P1–P8) and five of six quality gates (Q1, Q3–Q6) are met, with Q2 (full 10M-iter
+> fuzz) running nightly. See [`CLAUDE.md`](CLAUDE.md) for the phase-by-phase state,
+> [`docs/TRACEABILITY.md`](docs/TRACEABILITY.md) for the requirement → module → proving-test map,
+> [`BENCHMARKS.md`](BENCHMARKS.md) for the numbers, [`docs/paper/engram.md`](docs/paper/engram.md) for the
+> paper, and [`docs/book/`](docs/book/) for the architecture book.
+
+## Results
+
+On the reference machine (Apple M3, 8 cores, 16 GB) — every number reproducible via `cargo xtask bench`:
+
+| | |
+|---|---|
+| Durable episodic writes | **330K /s** (P1); **414K /s** bulk (P2) |
+| Semantic point read · time-travel | **~318 ns** (P3) · **~162 ns** @ 200 versions (P4) |
+| Provenance trace, depth 1000 | **~91 µs** (P5) |
+| 10-instance throughput, ACC on | **~2.5M ev/s** (P6) |
+| Decay-on-read (zero background CPU) | **~191 ns** (P7) |
+| Recover 1,000,000 WAL entries | **~128 ms** (P8) |
+| **Time-travel vs hand-built PostgreSQL** | **165.8× faster** (146.7 ns vs 24,322.9 ns) — Q4 |
+| Coverage (storage + consistency) | **93.44%** lines — Q3 |
 
 ## What makes it different
 
@@ -64,28 +81,32 @@ cargo xtask ci
 cargo xtask fmt        # format in place
 cargo xtask clippy     # lint with warnings denied
 cargo xtask test       # run tests
-cargo xtask bench      # criterion benchmarks (land in Phase 2+)
-cargo xtask demo       # SRE provenance demo (lands in Phase 4b)
+cargo xtask bench      # criterion benchmarks
+cargo xtask demo       # the SRE provenance demo
 
-# The CLI
-cargo run -p engram-cli -- help
+# The CLI — a memory in five commands
+cargo run -p engram-cli -- init /tmp/mem
+cargo run -p engram-cli -- put belief /tmp/mem service-x health unhealthy 0.92
+cargo run -p engram-cli -- get belief /tmp/mem service-x health   # unhealthy (confidence 0.920)
+cargo run -p engram-cli -- demo                                   # why did the agent restart X?
 ```
 
 Requires a stable Rust toolchain (1.96+). Optional tooling — `cargo-deny`, `cargo-llvm-cov`,
-`cargo-fuzz` (nightly) — is auto-detected: `cargo xtask ci` reports them as `SKIP` when absent, and CI
-installs them to enforce the full gate.
+`cargo-fuzz` (nightly), `protoc` (gRPC), `maturin` (Python), `postgresql` (Q4) — is auto-detected:
+`cargo xtask ci` reports absent tools as `SKIP`, and CI installs them to enforce the full gate.
 
 ## Roadmap
 
 - **Phase 0** — scaffold + CI ✅
-- **Phase 1** — records, write-ahead log, copy-on-write B-tree (MVCC)
-- **Phase 2** — the four stores + causal-provenance DAG
-- **Phase 3** — ACC consistency layer + REST/gRPC + Python SDK
-- **Phase 4** — consolidation + SRE case study + evaluation (vs PostgreSQL)
-- **Phase 5** — VLDB-style paper + mdBook + causal-DAG playground + example agents
+- **Phase 1** — records, write-ahead log, copy-on-write B-tree (MVCC) ✅
+- **Phase 2** — the four stores + causal-provenance DAG ✅
+- **Phase 3** — ACC consistency layer + REST/gRPC + Python SDK ✅
+- **Phase 4** — consolidation + SRE case study + evaluation (165.8× vs PostgreSQL) ✅
+- **Phase 5** — VLDB-style paper + mdBook + causal-DAG playground + example agents ✅
 
-See [`docs/paper/`](docs/paper/) for the research framing (targeting VLDB 2027) and
-[`BENCHMARKS.md`](BENCHMARKS.md) for the performance targets and the reference machine.
+See [`docs/paper/engram.md`](docs/paper/engram.md) for the research framing (targeting VLDB 2027),
+[`docs/book/`](docs/book/) for the architecture book, and [`BENCHMARKS.md`](BENCHMARKS.md) for the
+performance targets and the reference machine.
 
 ## License
 

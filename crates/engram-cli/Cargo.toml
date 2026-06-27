@@ -17,3 +17,6 @@ path = "src/main.rs"
 
 [dependencies]
 engram-core = { workspace = true }
+engram-query = { workspace = true }
+engram-storage = { workspace = true }
+anyhow = { workspace = true }

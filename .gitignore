@@ -34,3 +34,6 @@ scratch/
 .idea/
 .vscode/
 *.swp
+
+# mdBook build output
+/docs/book/book/
