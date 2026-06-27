@@ -41,7 +41,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | **~2.5 M ev/s** (10 threads, ACC causal delivery) | ✅ Phase 3b (~10× over) |
 | P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | eval primitive 1.1–5.3 ns; **full decay-on-read point query ~191 ns**, zero background CPU | ✅ Phase 2b |
 | P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | **128 ms median** (p99 ≈ 136 ms), 100% committed recovered | ✅ Phase 1b (~15× under) |
-| Q4 | Time-travel vs. hand-built PostgreSQL bitemporal schema | ≥ 10× faster | — | ⬜ Phase 4c |
+| Q4 | Time-travel vs. hand-built PostgreSQL bitemporal schema | ≥ 10× faster | **165.8×** (146.7 ns vs 24,322.9 ns, 200-version as-of) | ✅ Phase 4c |
 
 ## Quality gates
 
@@ -49,15 +49,27 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 |----|------|--------|--------|
 | Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ✅ Phase 3b (1,200 cases; prefix-closure/RYW/monotonic/convergence) |
 | Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M local smoke, **0 crashes**; full 10M nightly + `dag_decode` (Phase 2d) pending |
-| Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | ⬜ Phase 4 |
+| Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | **93.44% lines** (94.27% regions), `cargo llvm-cov` | ✅ Phase 4c |
 | Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ✅ Phase 3b (one clock/op; 16 B/slot, unit + proptest) |
 | Q6 | Clippy / rustfmt / `cargo test` / `cargo deny` | green every commit, clippy `-D warnings` | ✅ (all four green locally + in CI) |
 
 ## Tooling status on the reference machine
 
 - `cargo-deny` — **installed (0.19.9); passes locally** (advisories/bans/licenses/sources ok) and in CI.
-- `cargo-fuzz` — **installed; nightly toolchain installed**; `record_codec` builds and smoke-runs locally.
-- `cargo-llvm-cov` — not yet installed locally; CI installs via `taiki-e/install-action`.
+- `cargo-fuzz` — **installed; nightly toolchain installed**; 4 targets build and smoke-run locally.
+- `cargo-llvm-cov` — **installed (0.8.7)**; storage+consistency line coverage **93.44%** (Q3 ✅).
+- `protoc` (gRPC) + `maturin` (Python wheel) + `postgresql@16` (Q4) — installed on the reference machine.
+
+## Phase 4 measured (2026-06-27, reference machine)
+
+- **Q4 — time-travel vs PostgreSQL** (`benches/compare_postgres`, 200-version belief, identical as-of query):
+  Engram `get_at_tx` **146.7 ns/query** (in-process `floor`) vs PostgreSQL **24,322.9 ns/query** (indexed
+  bitemporal SELECT over the client/server protocol) ⇒ **165.8×**. The gap is the honest
+  in-process-vs-socket reality of agent memory; both answer the same query against 200 versions.
+- **Q3 — coverage** (`cargo llvm-cov`, storage + consistency): **93.44% lines**, 94.27% regions, 91.57%
+  functions.
+- **Consolidation**: 20 "be concise" events → 1 belief at confidence **0.878** (`1 − 0.9²⁰`) with 20-id
+  provenance, traceable through the DAG.
 
 ## Phase 1a measured (2026-06-26, reference machine)
 

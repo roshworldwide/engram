@@ -6,6 +6,29 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 4c — Evaluation (Q4 + Q3)
+
+- `benches/compare_postgres/` — a standalone harness timing the **same** bitemporal as-of query (a belief with
+  200 versions) in Engram vs a hand-built PostgreSQL bitemporal schema (indexed). **Q4 met: 165.8× faster**
+  (146.7 ns in-process `floor` vs 24,322.9 ns over Postgres's client/server protocol). Excluded from the
+  workspace; run against a live Postgres.
+- **Q3 met:** `cargo llvm-cov` reports **93.44% line coverage** (94.27% region) across `engram-storage` +
+  `engram-consistency`.
+
+### Phase 4b — SRE killer demo
+
+- `demos/sre` (`sre-demo`, `cargo xtask demo`) reproduces "why did the agent restart service X?" → traces the
+  causal-provenance DAG `action → belief(unhealthy) → observation(Y > Z)`. `Engine::get_belief` resolves
+  semantic provenance nodes.
+
+### Phase 4a — Consolidation engine
+
+- `engram-query::consolidation` — conservative rule-based promotion of beliefs from repeated episodic evidence
+  (pluggable `SignalExtractor`; dominant-object-per-`(subject,predicate)`; confidence `1−(1−w)^n`; provenance =
+  the supporting event ids). `Engine::consolidate_session` upserts each belief causally linked to its sources;
+  `engram-server::consolidation::spawn_consolidation` runs it as a periodic tokio task. Test: 20 "be concise"
+  events → 1 belief (conf ≈0.88, 20-id provenance traceable through the DAG).
+
 ### Phase 3d — Python SDK (PyO3)
 
 - `engram-py` exposes the engine to Python as the `engram` module (R8; pyo3 0.29, abi3-py39): `Engram(path)`

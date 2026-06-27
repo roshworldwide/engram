@@ -79,10 +79,20 @@ quick-orientation companion to it.
   (skip when the tool is absent). pyo3 pinned to 0.29 for advisory cleanliness.
 - **R1–R8 all implemented and proven. P1–P8 + Q1/Q5/Q6 met.** Remaining: R9 (paper/eval), Q2 (full 10M fuzz),
   Q3 (≥90% coverage), Q4 (≥10× vs PostgreSQL) — all Phase 4/5.
-- **Phase 4 — Consolidation + SRE demo + evaluation: NOT STARTED.** Next: 4a consolidation engine (promote
-  beliefs from repeated episodic evidence, causally linked); 4b the SRE killer demo (`cargo xtask demo`);
-  4c evaluation harness incl. **Q4 (≥10× time-travel vs a hand-built PostgreSQL bitemporal schema)**,
-  full criterion suite, Q3 coverage, Q2 10M-iter nightly fuzz.
+- **Phase 4 — Consolidation + SRE demo + evaluation: COMPLETE.**
+  - **4a** `engram-query::consolidation` — rule-based belief promotion from repeated evidence (pluggable
+    `SignalExtractor`, dominant object, confidence `1−(1−w)^n`, provenance = source ids); `Engine::
+    consolidate_session`; periodic tokio background task in `engram-server`.
+  - **4b** `demos/sre` (`cargo xtask demo`) — the provenance killer demo (action → belief → observation).
+  - **4c** `benches/compare_postgres` — **Q4 met: 165.8×** vs a hand-built PostgreSQL bitemporal schema;
+    **Q3 met: 93.44%** line coverage (`cargo llvm-cov`).
+- **Status: R1–R8 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟡 (4 fuzz targets smoke-clean, full 10M nightly).**
+  Remaining: R9 paper + the rest of Phase 5 (mdBook, playground, example agents).
+- **Phase 5 — Paper, docs, playground, examples: NOT STARTED.** 5a VLDB-style paper (formal ACC + efficiency
+  proof, pulling numbers from BENCHMARKS); 5b mdBook + README; 5c causal-DAG playground; 5d five example agents.
+- **Tooling on ref machine:** protoc, maturin, postgresql@16, cargo-llvm-cov, cargo-fuzz + nightly all
+  installed. Default xtask/CI gate stays toolchain-light; opt-in grpc/python steps + Q4/coverage are run
+  on demand.
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

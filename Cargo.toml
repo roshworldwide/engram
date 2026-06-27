@@ -11,9 +11,10 @@ members = [
     "demos/sre",
     "xtask",
 ]
-# The fuzz crate is a separate cargo-fuzz workspace (built with nightly) and is
+# The fuzz crate is a separate cargo-fuzz workspace (built with nightly), and the
+# Postgres comparison (Q4) needs a live database + the `postgres` client; both are
 # intentionally excluded from the default build graph.
-exclude = ["fuzz"]
+exclude = ["fuzz", "benches/compare_postgres"]
 
 [workspace.package]
 version = "0.0.0"

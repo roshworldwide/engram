@@ -1,0 +1,24 @@
+# Q4: Engram bitemporal time-travel vs a hand-built PostgreSQL bitemporal schema.
+# Standalone (excluded from the workspace) — needs a live PostgreSQL and the
+# `postgres` client crate. Run with: cargo run --release  (DATABASE_URL optional).
+[package]
+name = "compare-postgres"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+engram-core = { path = "../../crates/engram-core" }
+engram-storage = { path = "../../crates/engram-storage" }
+postgres = "0.19"
+anyhow = "1"
+tempfile = "3"
+
+[[bin]]
+name = "compare-postgres"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3

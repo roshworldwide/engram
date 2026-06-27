@@ -25,7 +25,8 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | R7 | ACC enforcement (RYW/monotonic/causal) | `engram-consistency/src/acc.rs` | `acc::tests` + `tests/acc_histories.rs` (Q1, 1200 histories) + `benches/multi_instance.rs` (P6) | ✅ Phase 3b |
 | R8 | Python SDK via PyO3 | `crates/engram-py/*` (pyo3 0.29, maturin) | `tests/test_engram.py` (SRE flow via `import engram`) + CI python job | ✅ Phase 3d |
 | §3 | Client APIs (engine + REST + gRPC) | `engram-query::Engine`, `engram-server` (axum/tonic) | `engram-query::engine::tests` + `tests/rest.rs` + `grpc::tests` | ✅ Phase 3c |
-| R9 | Research-grade rigor | `docs/paper/*`, benches, proptests | paper + reproducible eval | ⬜ Phase 5 |
+| R9 | Research-grade rigor | `docs/paper/*`, benches, `compare_postgres`, `demos/sre` | reproducible eval (Q4) + SRE case study ✅; paper ⬜ Phase 5 | 🟡 eval+case study done; paper Phase 5 |
+| 4a | Consolidation (repeated evidence → belief) | `engram-query::consolidation` + `engram-server::consolidation` | `consolidation::tests` + `engine::tests` + background-task test | ✅ Phase 4a |
 
 ## Performance metrics (P1–P8)
 
@@ -46,7 +47,7 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 |---|--------|------------------|--------|
 | Q1 | ≥ 1,000 randomized multi-agent histories, ACC holds | `engram-consistency/tests/acc_histories.rs` | ✅ Phase 3b (1,200 cases) |
 | Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` (nightly) | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M + `dag_ops` 170k smoke, 0 crashes; full 10M nightly pending |
-| Q3 | ≥ 90% coverage (storage + consistency) | `cargo llvm-cov` in CI | ⬜ Phase 4 |
-| Q4 | ≥ 10× faster time-travel vs PostgreSQL | `benches/compare_postgres/` | ⬜ Phase 4c |
+| Q3 | ≥ 90% coverage (storage + consistency) | `cargo llvm-cov` | ✅ Phase 4c (93.44% lines) |
+| Q4 | ≥ 10× faster time-travel vs PostgreSQL | `benches/compare_postgres/` | ✅ Phase 4c (165.8×) |
 | Q5 | ACC overhead O(\|agents\|), ≤ 16 B/slot, proven | `vector_clock::to_bytes` + `WriteOp::metadata_bytes` | ✅ Phase 3b (one 16 B/slot clock per op) |
 | Q6 | fmt/clippy(-D)/test/deny green every commit | `cargo xtask ci` + CI | ✅ (all green locally + in CI) |
