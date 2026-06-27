@@ -35,15 +35,14 @@ use engram_core::{
 };
 
 use crate::btree::CowBTree;
-use crate::error::{Result, StorageError};
+use crate::error::Result;
 use crate::wal::{Wal, WalOp};
 
+use super::common::{self, TxClock, WalWriter};
+
 struct Writer {
-    wal: Wal,
-    wal_tx_id: u64,
-    last_tx: i64,
-    next_counter: u128,
-    failed: bool,
+    wal: WalWriter,
+    tx: TxClock,
 }
 
 /// A versioned skill store. Reads are lock-free; writes are serialized.
@@ -74,9 +73,7 @@ impl ProceduralStore {
 
     /// Open an existing store, replaying committed skill versions.
     pub fn open_with_clock(path: impl AsRef<Path>, clock: Arc<dyn Clock>) -> Result<Self> {
-        let path = path.as_ref();
-        let recovered = Wal::recover(path)?;
-        let wal = Wal::open(path)?;
+        let (recovered, wal) = common::open_prelude(path.as_ref())?;
         let store = Self::new_store(wal, clock, recovered.max_tx_id.saturating_add(1));
 
         let mut max_tx = i64::MIN;
@@ -96,8 +93,8 @@ impl ProceduralStore {
         }
         {
             let mut w = store.writer();
-            w.last_tx = max_tx;
-            w.next_counter = max_counter.wrapping_add(1);
+            w.tx.last_tx = max_tx;
+            w.tx.next_counter = max_counter.wrapping_add(1);
         }
         Ok(store)
     }
@@ -105,11 +102,8 @@ impl ProceduralStore {
     fn new_store(wal: Wal, clock: Arc<dyn Clock>, wal_tx_id: u64) -> Self {
         ProceduralStore {
             writer: Mutex::new(Writer {
-                wal,
-                wal_tx_id,
-                last_tx: i64::MIN,
-                next_counter: 0,
-                failed: false,
+                wal: WalWriter::new(Some(wal), wal_tx_id),
+                tx: TxClock::new(),
             }),
             clock,
             by_skill: CowBTree::new(),
@@ -119,19 +113,6 @@ impl ProceduralStore {
 
     fn writer(&self) -> MutexGuard<'_, Writer> {
         self.writer.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn next_tx(&self, w: &mut Writer) -> i64 {
-        let now = self.clock.now().0;
-        let t = now.max(w.last_tx.saturating_add(1));
-        w.last_tx = t;
-        t
-    }
-
-    fn mint_id(w: &mut Writer, tx_nanos: i64) -> MemoryId {
-        let counter = w.next_counter;
-        w.next_counter = w.next_counter.wrapping_add(1);
-        MemoryId::from_parts((tx_nanos / 1_000_000).max(0) as u64, counter)
     }
 
     fn index(&self, record: Arc<ProceduralRecord>) {
@@ -160,20 +141,15 @@ impl ProceduralStore {
         valid_from: Timestamp,
     ) -> Result<MemoryId> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(StorageError::Wal(
-                "writer aborted by a prior failed write; reopen the store".into(),
-            ));
-        }
-        let now = self.next_tx(&mut w);
-        let wal_tx = w.wal_tx_id;
+        w.wal.guard("store")?;
+        let now = common::next_tx(self.clock.as_ref(), &mut w.tx);
 
         let prev = self.latest(agent, name);
         let (version, supersedes) = match &prev {
             Some(p) => (p.version.saturating_add(1), Some(p.id)),
             None => (1, None),
         };
-        let id = Self::mint_id(&mut w, now);
+        let id = common::mint_id(&mut w.tx, now);
         let record = ProceduralRecord {
             id,
             agent_id: agent,
@@ -185,16 +161,7 @@ impl ProceduralStore {
             tx_from: Timestamp(now),
         };
         let bytes = record.encode()?;
-        match w
-            .wal
-            .append(wal_tx, WalOp::Put(RecordKind::Procedural), &bytes)
-        {
-            Ok(_) => {}
-            Err(e) => {
-                w.failed = true;
-                return Err(e);
-            }
-        }
+        w.wal.append(RecordKind::Procedural, &bytes)?;
         self.index(Arc::new(record));
         Ok(id)
     }
@@ -227,15 +194,8 @@ impl ProceduralStore {
     /// Make all skill versions since the last commit durable.
     pub fn commit(&self) -> Result<()> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(StorageError::Wal(
-                "writer aborted by a prior failed write; reopen the store".into(),
-            ));
-        }
-        let tx = w.wal_tx_id;
-        w.wal.commit(tx)?;
-        w.wal_tx_id = w.wal_tx_id.saturating_add(1);
-        Ok(())
+        w.wal.guard("store")?;
+        w.wal.commit()
     }
 
     /// The total number of skill versions stored.

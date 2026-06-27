@@ -54,8 +54,10 @@ use engram_core::{
 };
 
 use crate::btree::CowBTree;
-use crate::error::{Result, StorageError};
+use crate::error::Result;
 use crate::wal::{Wal, WalOp};
+
+use super::common::{self, TxClock, WalWriter};
 
 /// The fields a caller supplies to record a belief; the store assigns the id and
 /// the transaction-time.
@@ -88,18 +90,11 @@ pub struct BeliefView {
     pub confidence: f32,
 }
 
-/// The serialized write side.
+/// The serialized write side: the shared WAL writer plus the bitemporal tx-time
+/// clock (transaction-time + id counter are distinct from the WAL group-commit id).
 struct Writer {
-    wal: Wal,
-    /// WAL transaction id for group commit (distinct from bitemporal tx-time).
-    wal_tx_id: u64,
-    /// Highest transaction-time stamped so far (kept strictly increasing).
-    last_tx: i64,
-    /// Monotonic counter feeding the randomness field of minted ids.
-    next_counter: u128,
-    /// Set when a WAL append failed mid-transaction; blocks `commit` so a
-    /// half-written batch can never be made durable.
-    failed: bool,
+    wal: WalWriter,
+    tx: TxClock,
 }
 
 /// A bitemporal, versioned belief store with lazy decay.
@@ -131,9 +126,7 @@ impl SemanticStore {
     /// Open an existing store with an injected clock, replaying the committed
     /// belief versions into the indexes.
     pub fn open_with_clock(path: impl AsRef<Path>, clock: Arc<dyn Clock>) -> Result<Self> {
-        let path = path.as_ref();
-        let recovered = Wal::recover(path)?;
-        let wal = Wal::open(path)?;
+        let (recovered, wal) = common::open_prelude(path.as_ref())?;
         let store = Self::new_store(wal, clock, recovered.max_tx_id.saturating_add(1));
 
         let mut max_tx = i64::MIN;
@@ -159,8 +152,8 @@ impl SemanticStore {
         }
         {
             let mut w = store.writer();
-            w.last_tx = max_tx;
-            w.next_counter = max_counter.wrapping_add(1);
+            w.tx.last_tx = max_tx;
+            w.tx.next_counter = max_counter.wrapping_add(1);
         }
         Ok(store)
     }
@@ -168,11 +161,8 @@ impl SemanticStore {
     fn new_store(wal: Wal, clock: Arc<dyn Clock>, wal_tx_id: u64) -> Self {
         SemanticStore {
             writer: Mutex::new(Writer {
-                wal,
-                wal_tx_id,
-                last_tx: i64::MIN,
-                next_counter: 0,
-                failed: false,
+                wal: WalWriter::new(Some(wal), wal_tx_id),
+                tx: TxClock::new(),
             }),
             clock,
             versions: CowBTree::new(),
@@ -182,22 +172,6 @@ impl SemanticStore {
 
     fn writer(&self) -> MutexGuard<'_, Writer> {
         self.writer.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    /// Strictly-increasing transaction-time in nanoseconds (never collides even
-    /// if the wall clock stalls or two upserts land in the same instant).
-    fn next_tx(&self, w: &mut Writer) -> i64 {
-        let now = self.clock.now().0;
-        let t = now.max(w.last_tx.saturating_add(1));
-        w.last_tx = t;
-        t
-    }
-
-    fn mint_id(w: &mut Writer, tx_nanos: i64) -> MemoryId {
-        let counter = w.next_counter;
-        w.next_counter = w.next_counter.wrapping_add(1);
-        let ms = (tx_nanos / 1_000_000).max(0) as u64;
-        MemoryId::from_parts(ms, counter)
     }
 
     /// Publish a version into the `versions` (keyed `(subject, predicate, tx_from)`)
@@ -231,26 +205,6 @@ impl SemanticStore {
         }
     }
 
-    /// Append to the WAL; on failure poison the writer so the in-flight
-    /// (uncommitted) transaction can never be committed half-written — recovery
-    /// then correctly drops the orphaned frames (no Commit marker).
-    fn append_or_poison(w: &mut Writer, wal_tx: u64, bytes: &[u8]) -> Result<()> {
-        match w
-            .wal
-            .append(wal_tx, WalOp::Put(RecordKind::Semantic), bytes)
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                w.failed = true;
-                Err(e)
-            }
-        }
-    }
-
-    fn aborted() -> StorageError {
-        StorageError::Wal("writer aborted by a prior failed write; reopen the store".into())
-    }
-
     /// Record a new belief version. Closes the previously-current version in
     /// transaction-time. Buffered into the WAL; durable at the next [`commit`](Self::commit).
     ///
@@ -259,11 +213,8 @@ impl SemanticStore {
     /// is never silently lost.
     pub fn upsert_belief(&self, input: BeliefInput) -> Result<MemoryId> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(Self::aborted());
-        }
-        let now = self.next_tx(&mut w);
-        let wal_tx = w.wal_tx_id;
+        w.wal.guard("store")?;
+        let now = common::next_tx(self.clock.as_ref(), &mut w.tx);
 
         // Prepare (fallible) the close-of-previous and the new version up front.
         let closed = match self.version_live_at(&input.subject, &input.predicate, now) {
@@ -274,7 +225,7 @@ impl SemanticStore {
             }
             _ => None,
         };
-        let id = Self::mint_id(&mut w, now);
+        let id = common::mint_id(&mut w.tx, now);
         let record = SemanticRecord {
             id,
             agent_id: input.agent_id,
@@ -294,9 +245,9 @@ impl SemanticStore {
         // Append both frames (poisoning on partial failure), then publish to the
         // indexes — new open version FIRST so a concurrent reader never observes
         // the continuously-held belief momentarily absent.
-        Self::append_or_poison(&mut w, wal_tx, &new_bytes)?;
+        w.wal.append(RecordKind::Semantic, &new_bytes)?;
         if let Some((bytes, _)) = &closed {
-            Self::append_or_poison(&mut w, wal_tx, bytes)?;
+            w.wal.append(RecordKind::Semantic, bytes)?;
         }
         self.index(Arc::new(record));
         if let Some((_, closed_rec)) = closed {
@@ -310,18 +261,15 @@ impl SemanticStore {
     /// History remains queryable via [`get_at_tx`](Self::get_at_tx).
     pub fn retract_belief(&self, subject: &str, predicate: &str) -> Result<bool> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(Self::aborted());
-        }
-        let now = self.next_tx(&mut w);
-        let wal_tx = w.wal_tx_id;
+        w.wal.guard("store")?;
+        let now = common::next_tx(self.clock.as_ref(), &mut w.tx);
         if let Some(current) = self.version_live_at(subject, predicate, now) {
             if current.tx_until.is_none() {
                 let mut closed = (*current).clone();
                 closed.tx_until = Some(Timestamp(now));
                 closed.valid_until = closed.valid_until.or(Some(Timestamp(now)));
                 let bytes = closed.encode()?;
-                Self::append_or_poison(&mut w, wal_tx, &bytes)?;
+                w.wal.append(RecordKind::Semantic, &bytes)?;
                 self.index(Arc::new(closed));
                 return Ok(true);
             }
@@ -370,13 +318,8 @@ impl SemanticStore {
     /// half-written batch is never given a durable Commit marker.
     pub fn commit(&self) -> Result<()> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(Self::aborted());
-        }
-        let tx = w.wal_tx_id;
-        w.wal.commit(tx)?;
-        w.wal_tx_id = w.wal_tx_id.saturating_add(1);
-        Ok(())
+        w.wal.guard("store")?;
+        w.wal.commit()
     }
 
     /// The total number of belief versions stored.

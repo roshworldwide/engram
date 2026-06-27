@@ -50,18 +50,13 @@ use crate::btree::CowBTree;
 use crate::error::{Result, StorageError};
 use crate::wal::{Wal, WalOp};
 
-/// The serialized write side (single-writer; the WAL is driven one append at a
-/// time). Reads never touch this.
-struct Writer {
-    wal: Wal,
-    tx_id: u64,
-}
+use super::common::{self, WalWriter};
 
 /// An append-only store of episodic events with primary/session/time/causal
 /// indexes. Cheap to share across threads (`Arc<EpisodicStore>`); reads are
 /// lock-free, writes are serialized.
 pub struct EpisodicStore {
-    writer: Mutex<Writer>,
+    writer: Mutex<WalWriter>,
     primary: CowBTree<u128, Arc<EpisodicRecord>>,
     by_session: CowBTree<(u64, u128), Arc<EpisodicRecord>>,
     by_time: CowBTree<(i64, u128), Arc<EpisodicRecord>>,
@@ -77,9 +72,7 @@ impl EpisodicStore {
     /// Open an existing store: recover the committed events from the WAL, replay
     /// them into the indexes, and resume appending (torn tail truncated).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let recovered = Wal::recover(path)?;
-        let wal = Wal::open(path)?;
+        let (recovered, wal) = common::open_prelude(path.as_ref())?;
         // Resume tx ids strictly above every tx id still on disk so a committed
         // tx id is never reused (keeps position-aware redo sound).
         let store = Self::with_writer(wal, recovered.max_tx_id.saturating_add(1));
@@ -99,7 +92,7 @@ impl EpisodicStore {
 
     fn with_writer(wal: Wal, tx_id: u64) -> Self {
         EpisodicStore {
-            writer: Mutex::new(Writer { wal, tx_id }),
+            writer: Mutex::new(WalWriter::new(Some(wal), tx_id)),
             primary: CowBTree::new(),
             by_session: CowBTree::new(),
             by_time: CowBTree::new(),
@@ -107,7 +100,7 @@ impl EpisodicStore {
         }
     }
 
-    fn writer(&self) -> MutexGuard<'_, Writer> {
+    fn writer(&self) -> MutexGuard<'_, WalWriter> {
         self.writer.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -143,13 +136,13 @@ impl EpisodicStore {
         // index updates so they are atomic with respect to other writers (the
         // check + insert cannot interleave with another append of the same id).
         let mut w = self.writer();
+        w.guard("store")?;
         if self.primary.get(&id.0).is_some() {
             return Err(StorageError::Duplicate(id));
         }
         let bytes = record.encode()?;
         let record = Arc::new(record);
-        let tx = w.tx_id;
-        w.wal.append(tx, WalOp::Put(RecordKind::Episodic), &bytes)?;
+        w.append(RecordKind::Episodic, &bytes)?;
         self.index(record);
         Ok(id)
     }
@@ -158,10 +151,8 @@ impl EpisodicStore {
     /// fresh transaction for subsequent appends.
     pub fn commit(&self) -> Result<()> {
         let mut w = self.writer();
-        let tx = w.tx_id;
-        w.wal.commit(tx)?;
-        w.tx_id = w.tx_id.saturating_add(1);
-        Ok(())
+        w.guard("store")?;
+        w.commit()
     }
 
     /// Append a single event and make it durable immediately.

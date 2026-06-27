@@ -35,16 +35,11 @@ use crate::btree::CowBTree;
 use crate::error::{Result, StorageError};
 use crate::wal::{Wal, WalOp};
 
-struct Writer {
-    /// `None` for an in-memory (ephemeral) DAG.
-    wal: Option<Wal>,
-    wal_tx_id: u64,
-    failed: bool,
-}
+use super::common::{self, WalWriter};
 
 /// An acyclic causal-provenance graph with forward and reverse adjacency.
 pub struct CausalDag {
-    writer: Mutex<Writer>,
+    writer: Mutex<WalWriter>,
     /// `(from, to) → edge_type` — forward adjacency (effects of `from`).
     forward: CowBTree<(u128, u128), EdgeType>,
     /// `(to, from) → edge_type` — reverse adjacency (causes of `to`).
@@ -66,9 +61,7 @@ impl CausalDag {
     /// Open an existing durable DAG, replaying committed edges. Edges were
     /// validated acyclic when added, so replay is trusted (no re-checking).
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        let path = path.as_ref();
-        let recovered = Wal::recover(path)?;
-        let wal = Wal::open(path)?;
+        let (recovered, wal) = common::open_prelude(path.as_ref())?;
         let dag = Self::with_writer(Some(wal), recovered.max_tx_id.saturating_add(1));
         for entry in &recovered.entries {
             if matches!(entry.op, WalOp::Put(RecordKind::CausalEdge)) {
@@ -86,17 +79,13 @@ impl CausalDag {
 
     fn with_writer(wal: Option<Wal>, wal_tx_id: u64) -> Self {
         CausalDag {
-            writer: Mutex::new(Writer {
-                wal,
-                wal_tx_id,
-                failed: false,
-            }),
+            writer: Mutex::new(WalWriter::new(wal, wal_tx_id)),
             forward: CowBTree::new(),
             reverse: CowBTree::new(),
         }
     }
 
-    fn writer(&self) -> MutexGuard<'_, Writer> {
+    fn writer(&self) -> MutexGuard<'_, WalWriter> {
         self.writer.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -132,11 +121,7 @@ impl CausalDag {
     /// existing edge updates its [`EdgeType`].
     pub fn add_edge(&self, from: MemoryId, to: MemoryId, edge_type: EdgeType) -> Result<()> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(StorageError::Wal(
-                "writer aborted by a prior failed write; reopen the DAG".into(),
-            ));
-        }
+        w.guard("DAG")?;
         if from == to {
             return Err(StorageError::Cycle { from, to });
         }
@@ -150,20 +135,8 @@ impl CausalDag {
             to_id: to,
             edge_type,
         };
-        if w.wal.is_some() {
-            // Read fields out before the mutable deref-borrow of `w.wal`
-            // (field access through MutexGuard's Deref borrows the whole guard).
-            let tx = w.wal_tx_id;
-            let bytes = edge.encode()?;
-            let res = match w.wal.as_mut() {
-                Some(wal) => wal.append(tx, WalOp::Put(RecordKind::CausalEdge), &bytes),
-                None => Ok(0),
-            };
-            if let Err(e) = res {
-                w.failed = true;
-                return Err(e);
-            }
-        }
+        let bytes = edge.encode()?;
+        w.append(RecordKind::CausalEdge, &bytes)?;
         self.link(edge);
         Ok(())
     }
@@ -243,17 +216,8 @@ impl CausalDag {
     /// Make all edges since the last commit durable (no-op for an in-memory DAG).
     pub fn commit(&self) -> Result<()> {
         let mut w = self.writer();
-        if w.failed {
-            return Err(StorageError::Wal(
-                "writer aborted by a prior failed write; reopen the DAG".into(),
-            ));
-        }
-        let tx = w.wal_tx_id;
-        if let Some(wal) = w.wal.as_mut() {
-            wal.commit(tx)?;
-            w.wal_tx_id = w.wal_tx_id.saturating_add(1);
-        }
-        Ok(())
+        w.guard("DAG")?;
+        w.commit()
     }
 
     /// The number of edges in the graph.

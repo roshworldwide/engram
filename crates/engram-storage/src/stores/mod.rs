@@ -4,6 +4,8 @@
 //! Landing order: `episodic` (2a) · `semantic` (2b) · `procedural` (2c) ·
 //! `working` (2e). The causal-provenance DAG store (2d) lives alongside them.
 
+pub(crate) mod common;
+
 pub mod causal;
 pub mod episodic;
 pub mod procedural;
