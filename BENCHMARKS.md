@@ -48,7 +48,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | #  | Gate | Target | Status |
 |----|------|--------|--------|
 | Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ✅ Phase 3b (1,200 cases; prefix-closure/RYW/monotonic/convergence) |
-| Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M local smoke, **0 crashes**; full 10M nightly + `dag_decode` (Phase 2d) pending |
+| Q2 | Fuzz iterations, zero crashes (record_codec / wal_reader / btree_ops / dag_ops) | ≥ 10,000,000 each | 🟢 **3/4 at full 10M, 0 crashes** (`record_codec` 10M/88s · `wal_reader` 10M/408s · `btree_ops` 10M/1043s); `dag_ops` 2.04M, 0 crashes (slowest target, ~1.1k exec/s) — a full 10M `dag_ops` run is underway |
 | Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | **93.44% lines** (94.27% regions), `cargo llvm-cov` | ✅ Phase 4c |
 | Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ✅ Phase 3b (one clock/op; 16 B/slot, unit + proptest) |
 | Q6 | Clippy / rustfmt / `cargo test` / `cargo deny` | green every commit, clippy `-D warnings` | ✅ (all four green locally + in CI) |

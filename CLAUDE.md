@@ -77,8 +77,12 @@ quick-orientation companion to it.
 - **Tooling note:** `protoc` (brew) + `maturin` (pip) installed on the reference machine. The default xtask/CI
   gate stays protoc/python-toolchain-free; dedicated `grpc` and `python` steps/jobs cover the opt-in features
   (skip when the tool is absent). pyo3 pinned to 0.29 for advisory cleanliness.
-- **R1–R9 all implemented and proven. P1–P8 + Q1/Q3/Q4/Q5/Q6 met.** Only Q2 (full 10M-iter fuzz) remains as
-  the nightly job; the four targets are smoke-clean with 0 crashes.
+- **R1–R9 all implemented and proven. P1–P8 + Q1/Q3/Q4/Q5/Q6 met.** Q2: 3/4 fuzz targets at the full 10M
+  runs with 0 crashes (`record_codec`/`wal_reader`/`btree_ops`); `dag_ops` (the slowest) at 2.04M, 0 crashes,
+  with a full 10M run underway.
+- **Post-5 hardening (done):** `stores::common` hoists the shared WAL-writer machinery across the four stores
+  (ADR-0017); `EpisodicStore::snapshot()` gives a cross-index-atomic 4-index view under the writer lock
+  (ADR-0018). Both committed green, no public API change.
 - **Phase 4 — Consolidation + SRE demo + evaluation: COMPLETE.**
   - **4a** `engram-query::consolidation` — rule-based belief promotion from repeated evidence (pluggable
     `SignalExtractor`, dominant object, confidence `1−(1−w)^n`, provenance = source ids); `Engine::
@@ -97,8 +101,8 @@ quick-orientation companion to it.
   - **5d** `examples/` — five Python-SDK agents (customer-support flagship + sre / personal-assistant /
     knowledge-base / research), all run green; SDK gained optional `decay`/`decay_rate` params + case-
     insensitive event types.
-- **Status: PROJECT COMPLETE. R1–R9 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟡 (4 fuzz targets smoke-clean,
-  full 10M is the nightly job).** Every commit green; `cargo xtask ci` GREEN.
+- **Status: PROJECT COMPLETE. R1–R9 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟢 (3/4 targets at full 10M, 0
+  crashes; dag_ops 2.04M and a 10M run underway).** Every commit green; `cargo xtask ci` GREEN.
 - **Tooling on ref machine:** protoc, maturin, postgresql@16, cargo-llvm-cov, cargo-fuzz + nightly all
   installed. Default xtask/CI gate stays toolchain-light; opt-in grpc/python steps + Q4/coverage are run
   on demand.
