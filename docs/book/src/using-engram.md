@@ -74,12 +74,11 @@ The `engram` wheel (built with maturin from `engram-py`, PyO3) mirrors the engin
 ```python
 import engram
 mem = engram.Engram("/tmp/mem")
-obs = mem.record_event(agent=1, session=7, valid_ms=100, kind="observation",
-                       payload="metric Y = 95%")
-belief = mem.upsert_belief(agent=1, subject="service-x", predicate="health",
-                           object="unhealthy", valid_ms=100, confidence=0.92,
-                           provenance=[obs])
-print(mem.current_belief("service-x", "health"))   # ("unhealthy", 0.92)
+obs = mem.record_event(1, 7, 100, "observation", "metric Y = 95%")
+belief = mem.upsert_belief(1, "service-x", "health", "unhealthy",
+                           valid_from_ms=100, confidence=0.92, provenance_ids=[obs],
+                           decay="exponential", decay_rate=1e-7)
+print(mem.current_belief("service-x", "health"))   # ('unhealthy', ~0.92)
 print(mem.provenance(belief))                        # [obs]
 ```
 

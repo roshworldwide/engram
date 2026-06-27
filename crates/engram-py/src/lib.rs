@@ -27,13 +27,31 @@ mod bindings {
     use engram_query::Engine;
 
     fn parse_event_type(s: &str) -> PyResult<EventType> {
-        match s {
-            "ToolCall" => Ok(EventType::ToolCall),
-            "Message" => Ok(EventType::Message),
-            "Observation" => Ok(EventType::Observation),
-            "Action" => Ok(EventType::Action),
+        match s.to_ascii_lowercase().as_str() {
+            "toolcall" | "tool_call" => Ok(EventType::ToolCall),
+            "message" | "msg" => Ok(EventType::Message),
+            "observation" | "obs" => Ok(EventType::Observation),
+            "action" => Ok(EventType::Action),
             other => Err(PyValueError::new_err(format!(
-                "unknown event_type: {other}"
+                "unknown event_type: {other} (tool_call|message|observation|action)"
+            ))),
+        }
+    }
+
+    /// Parse a `(kind, rate)` decay spec from Python. `kind` is one of
+    /// `none|exponential|power_law`; `rate` is `lambda` (per second) for
+    /// exponential or `beta` for power-law.
+    fn parse_decay(kind: Option<&str>, rate: Option<f32>) -> PyResult<DecayFunction> {
+        match kind.map(str::to_ascii_lowercase).as_deref() {
+            None | Some("none") => Ok(DecayFunction::None),
+            Some("exponential" | "exp") => Ok(DecayFunction::Exponential {
+                lambda: rate.unwrap_or(0.0),
+            }),
+            Some("power_law" | "powerlaw" | "power") => Ok(DecayFunction::PowerLaw {
+                beta: rate.unwrap_or(0.0),
+            }),
+            Some(other) => Err(PyValueError::new_err(format!(
+                "unknown decay: {other} (none|exponential|power_law)"
             ))),
         }
     }
@@ -98,7 +116,7 @@ mod bindings {
         /// Upsert a semantic belief; returns the new version's id. Each provenance
         /// id is linked into the provenance DAG.
         #[allow(clippy::too_many_arguments)]
-        #[pyo3(signature = (agent, subject, predicate, object, valid_from_ms, confidence, provenance_ids=None))]
+        #[pyo3(signature = (agent, subject, predicate, object, valid_from_ms, confidence, provenance_ids=None, decay=None, decay_rate=None))]
         fn upsert_belief(
             &self,
             agent: u64,
@@ -108,6 +126,8 @@ mod bindings {
             valid_from_ms: i64,
             confidence: f32,
             provenance_ids: Option<Vec<String>>,
+            decay: Option<&str>,
+            decay_rate: Option<f32>,
         ) -> PyResult<String> {
             let id = self
                 .inner
@@ -118,7 +138,7 @@ mod bindings {
                     object.into_bytes(),
                     Timestamp::from_millis(valid_from_ms),
                     confidence,
-                    DecayFunction::None,
+                    parse_decay(decay, decay_rate)?,
                     parse_ids(provenance_ids)?,
                 )
                 .map_err(runtime_err)?;
