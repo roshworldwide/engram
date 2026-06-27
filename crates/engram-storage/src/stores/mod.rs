@@ -13,7 +13,7 @@ pub mod semantic;
 pub mod working;
 
 pub use causal::CausalDag;
-pub use episodic::EpisodicStore;
+pub use episodic::{EpisodicSnapshot, EpisodicStore};
 pub use procedural::ProceduralStore;
 pub use semantic::{BeliefInput, BeliefView, SemanticStore};
 pub use working::{WorkingMemory, DEFAULT_CAPACITY};

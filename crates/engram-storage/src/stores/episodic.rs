@@ -46,7 +46,7 @@ use engram_core::{
     from_msgpack, EngramError, EpisodicRecord, MemoryId, Record, RecordKind, SessionId, Timestamp,
 };
 
-use crate::btree::CowBTree;
+use crate::btree::{CowBTree, Snapshot};
 use crate::error::{Result, StorageError};
 use crate::wal::{Wal, WalOp};
 
@@ -109,9 +109,11 @@ impl EpisodicStore {
     /// The four trees are published per-tree (each `insert` is its own atomic
     /// root swap), not as a single atomic multi-index step. Called under the
     /// writer lock with allocation-only work (no panicking ops), so the only
-    /// observable effect on a concurrent reader is a brief cross-index skew
-    /// within one append; a truly atomic multi-index snapshot is deferred to the
-    /// MVCC/ACC layer (Phase 3).
+    /// observable effect on a concurrent reader correlating per-call methods is a
+    /// brief cross-index skew within one append. For a reader that needs a
+    /// consistent multi-index view, [`EpisodicStore::snapshot`] pins all four
+    /// trees under this same writer lock (an event is then visible in all four or
+    /// in none).
     fn index(&self, record: Arc<EpisodicRecord>) {
         let id = record.id.0;
         self.primary.insert(id, Arc::clone(&record));
@@ -201,6 +203,87 @@ impl EpisodicStore {
 
     /// Every event that lists `cause` among its `cause_ids` (the direct effects
     /// of `cause`), ascending by effect id.
+    #[must_use]
+    pub fn effects_of(&self, cause: MemoryId) -> Vec<Arc<EpisodicRecord>> {
+        self.by_cause
+            .range((cause.0, u128::MIN)..=(cause.0, u128::MAX))
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    /// A **cross-index-consistent** snapshot of all four indexes.
+    ///
+    /// Each per-call method above is internally MVCC-consistent but reads its own
+    /// index independently, so a reader correlating two of them mid-append can
+    /// transiently see them disagree. `snapshot` takes the writer lock — the same
+    /// lock [`append`](Self::append) holds across its whole 4-index fan-out — then
+    /// pins all four trees at that instant, so the returned view reflects every
+    /// append **atomically**: an event is present in all four indexes or in none.
+    /// The lock is released here; the returned [`EpisodicSnapshot`] holds only `Arc`
+    /// pins and reads lock-free.
+    #[must_use]
+    pub fn snapshot(&self) -> EpisodicSnapshot {
+        let _w = self.writer();
+        EpisodicSnapshot {
+            primary: self.primary.snapshot(),
+            by_session: self.by_session.snapshot(),
+            by_time: self.by_time.snapshot(),
+            by_cause: self.by_cause.snapshot(),
+        }
+    }
+}
+
+/// A frozen, cross-index-consistent view of an [`EpisodicStore`], captured by
+/// [`EpisodicStore::snapshot`]. Reads are lock-free and reflect exactly the events
+/// present when the snapshot was taken — in all four indexes atomically.
+pub struct EpisodicSnapshot {
+    primary: Snapshot<u128, Arc<EpisodicRecord>>,
+    by_session: Snapshot<(u64, u128), Arc<EpisodicRecord>>,
+    by_time: Snapshot<(i64, u128), Arc<EpisodicRecord>>,
+    by_cause: Snapshot<(u128, u128), Arc<EpisodicRecord>>,
+}
+
+impl EpisodicSnapshot {
+    /// Look up an event by id in the frozen view.
+    #[must_use]
+    pub fn get(&self, id: MemoryId) -> Option<Arc<EpisodicRecord>> {
+        self.primary.get(&id.0)
+    }
+
+    /// The number of events in this snapshot.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.primary.len()
+    }
+
+    /// Whether the snapshot holds no events.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.primary.is_empty()
+    }
+
+    /// All events in `session` (frozen view), ascending by id — same convention as
+    /// [`EpisodicStore::scan_session`].
+    #[must_use]
+    pub fn scan_session(&self, session: SessionId) -> Vec<Arc<EpisodicRecord>> {
+        self.by_session
+            .range((session.0, u128::MIN)..=(session.0, u128::MAX))
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    /// All events whose `valid_time` is in the half-open interval `[lo, hi)` (frozen
+    /// view) — same convention as [`EpisodicStore::scan_time_range`].
+    #[must_use]
+    pub fn scan_time_range(&self, lo: Timestamp, hi: Timestamp) -> Vec<Arc<EpisodicRecord>> {
+        self.by_time
+            .range((lo.0, u128::MIN)..(hi.0, u128::MIN))
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    /// The direct effects of `cause` (frozen view) — same convention as
+    /// [`EpisodicStore::effects_of`].
     #[must_use]
     pub fn effects_of(&self, cause: MemoryId) -> Vec<Arc<EpisodicRecord>> {
         self.by_cause
@@ -330,5 +413,84 @@ mod tests {
             .append_committed(event(1000, 0, 2000, vec![]))
             .unwrap();
         assert_eq!(store.len(), 51);
+    }
+
+    #[test]
+    fn snapshot_is_frozen_across_all_four_indexes() {
+        let dir = tempdir().unwrap();
+        let store = EpisodicStore::create(dir.path().join("e.wal")).unwrap();
+        store.append_committed(event(1, 7, 1000, vec![])).unwrap();
+
+        let snap = store.snapshot();
+        // Append a second event (which cites event 1) AFTER the snapshot.
+        let id2 = store
+            .append_committed(event(2, 7, 2000, vec![MemoryId(1)]))
+            .unwrap();
+
+        // The snapshot is frozen at one event — consistently across all four indexes.
+        assert_eq!(snap.len(), 1);
+        assert!(snap.get(MemoryId(2)).is_none());
+        assert_eq!(snap.scan_session(SessionId(7)).len(), 1);
+        assert_eq!(
+            snap.scan_time_range(Timestamp::from_millis(1500), Timestamp::from_millis(2500))
+                .len(),
+            0
+        );
+        assert!(snap.effects_of(MemoryId(1)).is_empty());
+
+        // The live store sees the new event in every index.
+        assert_eq!(store.len(), 2);
+        assert_eq!(store.effects_of(MemoryId(1)).len(), 1);
+        assert_eq!(store.get(id2).unwrap().payload, b"p2");
+    }
+
+    #[test]
+    fn snapshot_is_cross_index_atomic_under_concurrent_writes() {
+        let dir = tempdir().unwrap();
+        let store = Arc::new(EpisodicStore::create(dir.path().join("e.wal")).unwrap());
+
+        // A writer streams events; each event i lands in ALL four indexes
+        // (session i, time 1000+i, cause i-1).
+        let w = Arc::clone(&store);
+        let writer = std::thread::spawn(move || {
+            for i in 1..1000u128 {
+                w.append(event(i, i as u64, 1000 + i as i64, vec![MemoryId(i - 1)]))
+                    .unwrap();
+            }
+            w.commit().unwrap();
+        });
+
+        // Concurrent snapshots must never observe a torn event (present in one
+        // index, absent from another).
+        for _ in 0..300 {
+            let snap = store.snapshot();
+            let n = snap.len() as u128;
+            for i in 1..=n {
+                if snap.get(MemoryId(i)).is_some() {
+                    assert_eq!(
+                        snap.scan_session(SessionId(i as u64)).len(),
+                        1,
+                        "id {i}: in primary but torn in by_session"
+                    );
+                    assert_eq!(
+                        snap.scan_time_range(
+                            Timestamp::from_millis(1000 + i as i64),
+                            Timestamp::from_millis(1001 + i as i64),
+                        )
+                        .len(),
+                        1,
+                        "id {i}: torn in by_time"
+                    );
+                    if i > 1 {
+                        assert_eq!(
+                            snap.effects_of(MemoryId(i - 1)).len(),
+                            1,
+                            "id {i}: torn in by_cause"
+                        );
+                    }
+                }
+            }
+        }
+        writer.join().unwrap();
     }
 }
