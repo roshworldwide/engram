@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "semantic_read"
 harness = false
+
+[[bench]]
+name = "provenance"
+harness = false
