@@ -48,7 +48,7 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | # | Metric | Proving artifact | Status |
 |---|--------|------------------|--------|
 | Q1 | ≥ 1,000 randomized multi-agent histories, ACC holds | `engram-consistency/tests/acc_histories.rs` | ✅ Phase 3b (1,200 cases) |
-| Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` | 🟢 3/4 at full **10M, 0 crashes** (`record_codec`/`wal_reader`/`btree_ops`); `dag_ops` 2.04M, 0 crashes, full 10M run underway |
+| Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` | ✅ all 4 targets at full **10M, 0 crashes** (`record_codec`/`wal_reader`/`btree_ops`/`dag_ops`) |
 | Q3 | ≥ 90% coverage (storage + consistency) | `cargo llvm-cov` | ✅ Phase 4c (93.44% lines) |
 | Q4 | ≥ 10× faster time-travel vs PostgreSQL | `benches/compare_postgres/` | ✅ Phase 4c (165.8×) |
 | Q5 | ACC overhead O(\|agents\|), ≤ 16 B/slot, proven | `vector_clock::to_bytes` + `WriteOp::metadata_bytes` | ✅ Phase 3b (one 16 B/slot clock per op) |

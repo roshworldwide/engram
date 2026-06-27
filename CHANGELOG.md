@@ -6,7 +6,12 @@ milestone.
 
 ## [Unreleased]
 
-### Post-5 hardening — refactor + cross-index snapshot
+### Post-5 hardening — Q2 closed + refactor + cross-index snapshot
+
+- **Q2 met** — all four cargo-fuzz targets ran the full **10,000,000** iterations with **0 crashes**
+  (`record_codec` 88s · `wal_reader` 408s · `btree_ops` 1043s · `dag_ops` 8143s). With this, **every gate
+  R1–R9 / P1–P8 / Q1–Q6 is met.**
+
 
 - **`stores::common`** — hoisted the duplicated WAL-writer machinery (a `WalWriter` over `Option<Wal>` + an
   optional `TxClock` mixin + `aborted`/`open_prelude`/`next_tx`/`mint_id`) shared by the four stores, via

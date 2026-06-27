@@ -77,9 +77,9 @@ quick-orientation companion to it.
 - **Tooling note:** `protoc` (brew) + `maturin` (pip) installed on the reference machine. The default xtask/CI
   gate stays protoc/python-toolchain-free; dedicated `grpc` and `python` steps/jobs cover the opt-in features
   (skip when the tool is absent). pyo3 pinned to 0.29 for advisory cleanliness.
-- **R1–R9 all implemented and proven. P1–P8 + Q1/Q3/Q4/Q5/Q6 met.** Q2: 3/4 fuzz targets at the full 10M
-  runs with 0 crashes (`record_codec`/`wal_reader`/`btree_ops`); `dag_ops` (the slowest) at 2.04M, 0 crashes,
-  with a full 10M run underway.
+- **R1–R9 all implemented and proven. ALL gates met: P1–P8 + Q1–Q6.** Q2 closed: all four fuzz targets ran
+  the full 10,000,000 iterations with 0 crashes (`record_codec` 88s · `wal_reader` 408s · `btree_ops` 1043s ·
+  `dag_ops` 8143s).
 - **Post-5 hardening (done):** `stores::common` hoists the shared WAL-writer machinery across the four stores
   (ADR-0017); `EpisodicStore::snapshot()` gives a cross-index-atomic 4-index view under the writer lock
   (ADR-0018). Both committed green, no public API change.
@@ -101,8 +101,8 @@ quick-orientation companion to it.
   - **5d** `examples/` — five Python-SDK agents (customer-support flagship + sre / personal-assistant /
     knowledge-base / research), all run green; SDK gained optional `decay`/`decay_rate` params + case-
     insensitive event types.
-- **Status: PROJECT COMPLETE. R1–R9 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟢 (3/4 targets at full 10M, 0
-  crashes; dag_ops 2.04M and a 10M run underway).** Every commit green; `cargo xtask ci` GREEN.
+- **Status: PROJECT COMPLETE. R1–R9 done; P1–P8 met; Q1–Q6 ALL met** (Q2 closed: 4/4 fuzz targets at full
+  10M, 0 crashes). Every commit green; `cargo xtask ci` GREEN.
 - **Tooling on ref machine:** protoc, maturin, postgresql@16, cargo-llvm-cov, cargo-fuzz + nightly all
   installed. Default xtask/CI gate stays toolchain-light; opt-in grpc/python steps + Q4/coverage are run
   on demand.
