@@ -159,6 +159,12 @@ impl Engine {
         self.semantic.get_at_tx(subject, predicate, at)
     }
 
+    /// Fetch a semantic belief version by id (e.g. to resolve a provenance node).
+    #[must_use]
+    pub fn get_belief(&self, id: MemoryId) -> Option<Arc<engram_core::SemanticRecord>> {
+        self.semantic.get_by_id(id)
+    }
+
     /// Add a causal edge directly.
     pub fn add_edge(&self, from: MemoryId, to: MemoryId, edge_type: EdgeType) -> Result<()> {
         self.causal.add_edge(from, to, edge_type)?;

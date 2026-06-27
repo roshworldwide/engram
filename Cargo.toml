@@ -8,6 +8,7 @@ members = [
     "crates/engram-server",
     "crates/engram-py",
     "crates/engram-cli",
+    "demos/sre",
     "xtask",
 ]
 # The fuzz crate is a separate cargo-fuzz workspace (built with nightly) and is

@@ -245,11 +245,7 @@ fn summarize(results: &[(&str, Outcome)]) -> bool {
 }
 
 fn cmd_demo() -> bool {
-    println!("Engram SRE provenance demo lands in Phase 4b.");
-    println!("It will store observations (episodic), runbook steps (procedural), and");
-    println!("inferred state (semantic), then trace `why did the agent restart X?` to");
-    println!("the root-cause episodic event via the causal-provenance DAG.");
-    true
+    step("SRE provenance demo", &["run", "--quiet", "-p", "sre-demo"]).passed()
 }
 
 fn print_help() {

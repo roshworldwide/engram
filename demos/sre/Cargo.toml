@@ -1,0 +1,20 @@
+[package]
+name = "sre-demo"
+description = "The Engram SRE causal-provenance killer demo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "sre-demo"
+path = "src/main.rs"
+
+[dependencies]
+engram-core = { workspace = true }
+engram-query = { workspace = true }
+anyhow = { workspace = true }
+tempfile = { workspace = true }

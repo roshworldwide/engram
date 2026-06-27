@@ -1444,6 +1444,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sre-demo"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "engram-core",
+ "engram-query",
+ "tempfile",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
