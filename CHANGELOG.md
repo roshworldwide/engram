@@ -6,6 +6,16 @@ milestone.
 
 ## [Unreleased]
 
+### Post-5 hardening — refactor + cross-index snapshot
+
+- **`stores::common`** — hoisted the duplicated WAL-writer machinery (a `WalWriter` over `Option<Wal>` + an
+  optional `TxClock` mixin + `aborted`/`open_prelude`/`next_tx`/`mint_id`) shared by the four stores, via
+  composition. No public API change; all store tests unchanged and green. Episodic gains the poison-on-failed-
+  append guard the other stores already had (ADR-0017).
+- **`EpisodicStore::snapshot()`** — a cross-index-consistent `EpisodicSnapshot` that pins all four indexes
+  under the writer lock, so a reader sees every append atomically (all four indexes or none). Zero `btree.rs`
+  changes; realizes the previously-deferred cross-index snapshot (ADR-0018).
+
 ### Phase 5 — Paper, docs, playground, examples (R9)
 
 - **5a** `docs/paper/engram.md` — the full VLDB-targeted paper: formal ACC contract (P1–P4), the efficiency

@@ -246,3 +246,37 @@ fixed-width form makes the bound exact and the encoding deterministic.
   violating Monotonic Sessions (§9.3). Fixed with a per-session `last_read` cache that only accepts a winner
   causally ≥ the last value returned. `by_key` is also pruned to the live frontier on every write/deliver,
   bounding memory and read cost to the concurrency width.
+
+## ADR-0017 — Shared store-writer machinery hoisted into `stores::common` (post-Phase-5)
+
+**Status:** accepted.
+
+- **Composition over copy-paste.** The four WAL-backed stores each carried a near-identical `Writer { wal,
+  wal_tx_id, [last_tx, next_counter,] failed }` plus group-commit, a poison guard, and an open prelude
+  (`Wal::recover` + `Wal::open`). This is now a single `pub(crate) stores::common`: a `WalWriter`
+  (`Option<Wal>` so causal's in-memory mode is the same type), an optional `TxClock` mixin embedded **only**
+  by the stores that mint transaction-time/ids (semantic, procedural — episodic/causal carry no dead fields),
+  and free fns `aborted`/`open_prelude`/`next_tx`/`mint_id`. Each store **holds** a `WalWriter` and delegates;
+  no generics-as-inheritance. **No public API changed**, so the query/server/Python layers needed no edits.
+- **Episodic gains poison semantics.** Routing episodic through `WalWriter::append`/`guard` gives it the
+  poison-on-failed-append behavior the other three already had (a half-written batch can no longer be
+  committed). Strictly safer; no tested path changes behavior.
+- **Borrow discipline preserved.** `WalWriter::append` reads `self.wal_tx_id` into a local *before*
+  `self.wal.as_mut()` — the same fix causal needed for the `MutexGuard` whole-borrow quirk — so the
+  abstraction does not reintroduce the borrow conflict.
+
+## ADR-0018 — Cross-index atomic snapshots via the writer lock, episodic only (post-Phase-5)
+
+**Status:** accepted. Supersedes the "deferred to the ACC layer" note for the episodic store.
+
+- **The writer lock is the linearization point.** Episodic's `append` already holds the writer `Mutex` across
+  its *entire* four-index fan-out, so a write is never half-published *to another writer*. `EpisodicStore::
+  snapshot()` takes that same lock and pins all four `CowBTree` snapshots at that instant, then drops the
+  lock. The returned `EpisodicSnapshot` therefore reflects every append atomically — present in all four
+  indexes or in none — and reads lock-free (it holds only `Arc` pins).
+- **Zero B-tree changes (chosen over the alternatives).** The design considered (a) a single `arc-swap` over a
+  struct of N roots and (b) exposing `get_root`/`set_root`. (a) is a moderate rewrite; (b) is a trap — N
+  independent `state.store` swaps stay non-atomic to a reader and `set_root` voids the "new root published
+  only on success" poison-recovery invariant. The writer-lock pin needs **no** `btree.rs` change, so the
+  proven B-tree correctness/MVCC/fuzz story is untouched, at the cost of one brief writer-lock acquisition per
+  snapshot. Cross-*store* atomic snapshots (separate mutexes) remain an ACC-layer concern, not this change.
