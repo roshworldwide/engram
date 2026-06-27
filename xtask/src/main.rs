@@ -37,6 +37,7 @@ fn main() -> ExitCode {
             &["llvm-cov", "--workspace", "--summary-only"],
         ),
         "fuzz" => optional("Fuzz smoke", "fuzz", &["fuzz", "list"]),
+        "grpc" => !matches!(grpc_step(), Outcome::Failed),
         "demo" => cmd_demo(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -62,10 +63,12 @@ fn cargo() -> String {
 }
 
 fn clippy_args() -> Vec<&'static str> {
+    // Default features only: the `grpc` feature needs `protoc`, so it is checked
+    // by the dedicated `grpc` step (which skips when protoc is absent) rather than
+    // pulled in here via `--all-features`.
     vec![
         "clippy",
         "--all-targets",
-        "--all-features",
         "--workspace",
         "--",
         "-D",
@@ -131,6 +134,48 @@ fn subcommand_present(subcommand: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Detect whether a plain binary (e.g. `protoc`) is on `PATH`.
+fn binary_present(name: &str) -> bool {
+    Command::new(name)
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Build, clippy, and test the optional `grpc` feature (needs `protoc`). Skips
+/// cleanly when protoc is absent.
+fn grpc_step() -> Outcome {
+    if !binary_present("protoc") {
+        let reason = "protoc not installed".to_string();
+        println!("\n==> gRPC feature: SKIP — {reason}");
+        return Outcome::Skipped(reason);
+    }
+    let clippy = step(
+        "gRPC clippy",
+        &[
+            "clippy",
+            "-p",
+            "engram-server",
+            "--all-targets",
+            "--features",
+            "grpc",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    );
+    if !clippy.passed() {
+        return clippy;
+    }
+    step(
+        "gRPC test",
+        &["test", "-p", "engram-server", "--features", "grpc"],
+    )
+}
+
 /// The full local gate. Optional tools degrade to `SKIP`.
 fn cmd_ci() -> bool {
     // Evaluated left-to-right, so the gate steps run in this order.
@@ -145,6 +190,7 @@ fn cmd_ci() -> bool {
             step("Build", &["build", "--all-targets", "--workspace"]),
         ),
         ("test", step("Tests", &["test", "--workspace"])),
+        ("grpc feature", grpc_step()),
         (
             "cargo-deny",
             optional_step("Supply chain", "deny", &["deny", "check"]),

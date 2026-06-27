@@ -27,6 +27,9 @@ use serde::{Deserialize, Serialize};
 use engram_core::{AgentId, DecayFunction, EventType, MemoryId, SessionId, Timestamp};
 use engram_query::Engine;
 
+#[cfg(feature = "grpc")]
+pub mod grpc;
+
 /// Build the router over a shared engine.
 pub fn router(engine: Arc<Engine>) -> Router {
     Router::new()

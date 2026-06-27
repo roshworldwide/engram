@@ -26,11 +26,31 @@ jobs:
       - name: rustfmt
         run: cargo fmt --all -- --check
       - name: clippy (-D warnings)
-        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+        # Default features only — the `grpc` feature (which needs protoc) is
+        # covered by the dedicated `grpc` job below.
+        run: cargo clippy --all-targets --workspace -- -D warnings
       - name: build
         run: cargo build --all-targets --workspace
       - name: test
         run: cargo test --workspace
+
+  # Opt-in gRPC surface (engram-server `grpc` feature) — needs protoc.
+  grpc:
+    name: gRPC feature (protoc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy (grpc)
+        run: cargo clippy -p engram-server --all-targets --features grpc -- -D warnings
+      - name: test (grpc)
+        run: cargo test -p engram-server --features grpc
 
   # Supply-chain gate (Q6): licenses + advisories + the no-storage-engine ban.
   supply-chain:

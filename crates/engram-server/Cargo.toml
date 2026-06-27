@@ -20,6 +20,16 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = "1"
 anyhow = { workspace = true }
+tonic = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[features]
+# gRPC is opt-in: it needs `protoc` at build time, so the default build (and CI
+# without protoc) stays protoc-free. Build with `--features grpc`.
+grpc = ["dep:tonic", "dep:prost"]
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

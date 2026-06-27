@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package engram;
+
+// The same operations as the REST surface, over gRPC.
+service Engram {
+  rpc RecordEpisodic(EpisodicRequest) returns (IdResponse);
+  rpc UpsertSemantic(SemanticRequest) returns (IdResponse);
+  rpc GetSemantic(BeliefQuery) returns (BeliefResponse);
+  rpc GetProvenance(ProvenanceRequest) returns (ProvenanceResponse);
+}
+
+message EpisodicRequest {
+  uint64 agent = 1;
+  uint64 session = 2;
+  int64 valid_time_ms = 3;
+  string event_type = 4; // "ToolCall" | "Message" | "Observation" | "Action"
+  bytes payload = 5;
+  repeated string cause_ids = 6; // Crockford-base32 MemoryIds
+}
+
+message SemanticRequest {
+  uint64 agent = 1;
+  string subject = 2;
+  string predicate = 3;
+  bytes object = 4;
+  int64 valid_from_ms = 5;
+  float confidence = 6;
+  repeated string provenance_ids = 7;
+}
+
+message IdResponse {
+  string id = 1;
+}
+
+message BeliefQuery {
+  string subject = 1;
+  string predicate = 2;
+  optional int64 at_ms = 3; // absent => current belief
+}
+
+message BeliefResponse {
+  string id = 1;
+  string subject = 2;
+  string predicate = 3;
+  bytes object = 4;
+  float confidence = 5;
+  int64 valid_from_ms = 6;
+  int64 tx_from_ms = 7;
+}
+
+message ProvenanceRequest {
+  string id = 1;
+}
+
+message ProvenanceResponse {
+  repeated string provenance = 1;
+}
