@@ -27,6 +27,8 @@ use serde::{Deserialize, Serialize};
 use engram_core::{AgentId, DecayFunction, EventType, MemoryId, SessionId, Timestamp};
 use engram_query::Engine;
 
+pub mod consolidation;
+
 #[cfg(feature = "grpc")]
 pub mod grpc;
 

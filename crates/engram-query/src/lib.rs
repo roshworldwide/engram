@@ -9,8 +9,12 @@
 //! Phase 3c: the [`Engine`] bundles the four stores + the causal DAG over one
 //! data directory; the REST/gRPC server and the Python SDK build on it.
 
+pub mod consolidation;
 pub mod engine;
 
+pub use consolidation::{
+    ConsolidatedBelief, Consolidator, FieldSignalExtractor, Signal, SignalExtractor,
+};
 pub use engine::Engine;
 
 /// The semantic version of the Engram query crate.

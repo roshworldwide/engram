@@ -171,6 +171,36 @@ impl Engine {
         self.causal.find_provenance_chain(id)
     }
 
+    /// Consolidate a session's episodic events into semantic beliefs (4a). Each
+    /// promoted belief is upserted with its evidence as provenance, so it is
+    /// causally linked back to the events it was derived from. Returns the new
+    /// belief version ids.
+    pub fn consolidate_session<E: crate::consolidation::SignalExtractor>(
+        &self,
+        extractor: &E,
+        agent: AgentId,
+        session: SessionId,
+        consolidator: &crate::consolidation::Consolidator,
+    ) -> Result<Vec<MemoryId>> {
+        let events = self.episodic.scan_session(session);
+        let beliefs = consolidator.consolidate(extractor, &events);
+        let mut ids = Vec::with_capacity(beliefs.len());
+        for belief in beliefs {
+            let id = self.upsert_belief(
+                agent,
+                belief.subject,
+                belief.predicate,
+                belief.object.into_bytes(),
+                self.clock.now(),
+                belief.confidence,
+                DecayFunction::None,
+                belief.provenance,
+            )?;
+            ids.push(id);
+        }
+        Ok(ids)
+    }
+
     /// Record a new version of a procedural skill.
     pub fn put_skill(
         &self,
@@ -313,5 +343,75 @@ mod tests {
         };
         assert!(engine.working_push(rec).is_none());
         assert_eq!(engine.working().len(), 1);
+    }
+
+    #[test]
+    fn consolidation_promotes_belief_with_traceable_provenance() {
+        use crate::consolidation::{Consolidator, FieldSignalExtractor};
+
+        let dir = tempdir().unwrap();
+        let engine = Engine::open(dir.path()).unwrap();
+
+        // 20 "be concise" signals, 3 conflicting "verbose", plus unstructured noise.
+        let mut concise = Vec::new();
+        for i in 0..20 {
+            concise.push(
+                engine
+                    .record_event(
+                        AgentId(1),
+                        SessionId(7),
+                        Timestamp::from_millis(1000 + i),
+                        EventType::Message,
+                        b"user\tresponse_length\tconcise".to_vec(),
+                        vec![],
+                    )
+                    .unwrap(),
+            );
+        }
+        for i in 0..3 {
+            engine
+                .record_event(
+                    AgentId(1),
+                    SessionId(7),
+                    Timestamp::from_millis(2000 + i),
+                    EventType::Message,
+                    b"user\tresponse_length\tverbose".to_vec(),
+                    vec![],
+                )
+                .unwrap();
+        }
+        for i in 0..5 {
+            engine
+                .record_event(
+                    AgentId(1),
+                    SessionId(7),
+                    Timestamp::from_millis(3000 + i),
+                    EventType::Observation,
+                    b"unstructured noise".to_vec(),
+                    vec![],
+                )
+                .unwrap();
+        }
+
+        let ids = engine
+            .consolidate_session(
+                &FieldSignalExtractor,
+                AgentId(1),
+                SessionId(7),
+                &Consolidator::default(),
+            )
+            .unwrap();
+        assert_eq!(ids.len(), 1);
+
+        let view = engine.current_belief("user", "response_length").unwrap();
+        assert_eq!(view.record.object, b"concise"); // dominant value
+        assert!((view.confidence - 0.878).abs() < 0.01); // 1 - 0.9^20
+        assert_eq!(view.record.provenance_ids.len(), 20);
+
+        // The consolidated belief traces back to exactly its 20 source events.
+        let mut prov = engine.provenance(ids[0]);
+        prov.sort();
+        concise.sort();
+        assert_eq!(prov, concise);
     }
 }
