@@ -6,6 +6,21 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 5 — Paper, docs, playground, examples (R9)
+
+- **5a** `docs/paper/engram.md` — the full VLDB-targeted paper: formal ACC contract (P1–P4), the efficiency
+  theorem with proof sketch (`O(|agents|)` metadata, no global synchronization), the evaluation table with
+  real numbers, the Q4 165.8× result, and the SRE case study.
+- **5b** `docs/book/` — an mdBook architecture guide (9 chapters), builds with `mdbook build docs/book`.
+  README rewritten with a results table and a five-command CLI quickstart. The `engram` CLI is wired from a
+  Phase-0 stub to real `Engine` calls (`init`/`put`/`get`/`as-of`/`why`/`demo`; usage errors exit 2, runtime 1).
+- **5c** `playground/index.html` — a self-contained, dependency-free interactive playground: click the causal
+  DAG to trace provenance, drag the decay sliders to watch a belief fade, drag the transaction-time slider to
+  time-travel a versioned belief.
+- **5d** `examples/` — five Python-SDK agents (customer-support flagship + sre / personal-assistant /
+  knowledge-base / research), each self-asserting so the set is an end-to-end SDK smoke test. The SDK's
+  `upsert_belief` gained optional `decay`/`decay_rate`; event-type parsing is now case-insensitive.
+
 ### Phase 4c — Evaluation (Q4 + Q3)
 
 - `benches/compare_postgres/` — a standalone harness timing the **same** bitemporal as-of query (a belief with

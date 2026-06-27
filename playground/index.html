@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Engram Playground</title>
+<style>
+  :root {
+    --bg: #14110f; --panel: #1d1916; --ink: #ece6df; --muted: #9a8f84;
+    --rust: #e07a4a; --episodic: #4ea66a; --semantic: #4a8fe0; --action: #e0544a;
+    --procedural: #a86ee0; --edge: #5a514a; --grid: #2a2420;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--grid); }
+  header h1 { margin: 0; font-size: 20px; }
+  header h1 span { color: var(--rust); }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 24px; }
+  .panel { background: var(--panel); border: 1px solid var(--grid); border-radius: 10px; padding: 16px; }
+  .panel h2 { margin: 0 0 4px; font-size: 15px; }
+  .panel .hint { color: var(--muted); margin: 0 0 12px; font-size: 12.5px; }
+  .full { grid-column: 1 / -1; }
+  svg { width: 100%; display: block; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .node rect { cursor: pointer; transition: opacity .15s, stroke .15s; }
+  .node text { pointer-events: none; fill: var(--ink); font-size: 11px; }
+  .node.dim rect, .node.dim text { opacity: .22; }
+  .node.hit rect { stroke: var(--rust); stroke-width: 2.5; }
+  .why { margin-top: 12px; padding: 10px 12px; background: #100d0b; border-left: 3px solid var(--rust);
+         border-radius: 4px; min-height: 38px; font-size: 13px; }
+  .why b { color: var(--rust); }
+  label.ctl { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  label.ctl span:first-child { width: 92px; color: var(--muted); }
+  input[type=range] { flex: 1; accent-color: var(--rust); }
+  select { background: #100d0b; color: var(--ink); border: 1px solid var(--grid); border-radius: 6px; padding: 4px 8px; }
+  .readout { font-variant-numeric: tabular-nums; }
+  .readout b { color: var(--rust); }
+  code { color: var(--rust); }
+  footer { color: var(--muted); padding: 8px 24px 24px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Engram</span> Playground</h1>
+  <p>An in-browser tour of the three ideas that make agent memory different: causal provenance, bitemporal time-travel, and confidence decay. Pure HTML — no build, no server.</p>
+</header>
+
+<div class="grid">
+  <!-- ───────────────────────── Causal DAG ───────────────────────── -->
+  <section class="panel">
+    <h2>Causal-provenance DAG</h2>
+    <p class="hint">Click any node to trace its provenance — the memories that caused it — exactly as <code>engine.provenance(id)</code> does.</p>
+    <svg id="dag" viewBox="0 0 520 300" role="img"></svg>
+    <div class="legend">
+      <span><i style="background:var(--episodic)"></i>episodic</span>
+      <span><i style="background:var(--semantic)"></i>semantic</span>
+      <span><i style="background:var(--procedural)"></i>procedural</span>
+      <span><i style="background:var(--action)"></i>action</span>
+    </div>
+    <div class="why" id="why">Click <b>restart service X</b> to ask “why?”.</div>
+  </section>
+
+  <!-- ─────────────────────── Confidence decay ───────────────────── -->
+  <section class="panel">
+    <h2>Confidence decay</h2>
+    <p class="hint">Decay is a lazy read-time primitive (~3&nbsp;ns). Pick a function and watch a belief fade.</p>
+    <svg id="decay" viewBox="0 0 520 240" role="img"></svg>
+    <label class="ctl"><span>function</span>
+      <select id="fn">
+        <option value="exp">exponential — c₀·e^(−λt)</option>
+        <option value="pow">power-law — c₀·(1+t)^(−β)</option>
+        <option value="step">step — c₀ then c_low</option>
+      </select>
+    </label>
+    <label class="ctl"><span>rate</span><input id="rate" type="range" min="1" max="100" value="35"></label>
+    <label class="ctl"><span>elapsed</span><input id="elapsed" type="range" min="0" max="90" value="30"></label>
+    <p class="readout">at <b id="el-d">30</b> days, confidence = <b id="conf">—</b> (c₀ = 0.99)</p>
+  </section>
+
+  <!-- ───────────────────── Bitemporal time-travel ───────────────── -->
+  <section class="panel full">
+    <h2>Bitemporal time-travel</h2>
+    <p class="hint">A belief with several versions. Drag the transaction-time slider — Engram answers “what was believed as-of T” with a single <code>floor</code> lookup (~162&nbsp;ns).</p>
+    <svg id="tt" viewBox="0 0 1040 160" role="img"></svg>
+    <label class="ctl"><span>as-of (tx)</span><input id="asof" type="range" min="0" max="100" value="100"></label>
+    <p class="readout">as-of tx=<b id="asof-v">100</b> &nbsp;→&nbsp; <b id="tt-val">—</b> &nbsp;(confidence <b id="tt-conf">—</b>)</p>
+  </section>
+</div>
+
+<footer>Data here is illustrative; the same operations run on the real engine via the Rust SDK, the <code>engram</code> CLI, REST/gRPC, or the Python wheel. See <code>docs/book/</code> and <code>docs/paper/engram.md</code>.</footer>
+
+<script>
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (n, a={}) => { const e = document.createElementNS(SVGNS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+const COLOR = { episodic:"#4ea66a", semantic:"#4a8fe0", procedural:"#a86ee0", action:"#e0544a" };
+
+/* ───────── Causal DAG ───────── */
+const nodes = {
+  P1:{type:"procedural", label:"runbook: restart-on-high-latency", x:30,  y:30},
+  E1:{type:"episodic",   label:"observe Y = 40% (ok)",            x:30,  y:120},
+  E42:{type:"episodic",  label:"observe Y = 95% > Z = 80%",       x:30,  y:210},
+  B1:{type:"semantic",   label:"service-x.health = unhealthy",    x:250, y:160},
+  A1:{type:"action",     label:"restart service X",               x:470, y:120},
+};
+// edge: cause → effect
+const edges = [["E42","B1"], ["B1","A1"], ["P1","A1"]];
+const W = 180, H = 46;
+
+const dag = document.getElementById("dag");
+function drawDAG() {
+  dag.innerHTML = "";
+  const defs = el("defs");
+  const m = el("marker", {id:"arrow", viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto-start-reverse"});
+  m.appendChild(el("path", {d:"M0,0 L10,5 L0,10 z", fill:"#5a514a"}));
+  defs.appendChild(m); dag.appendChild(defs);
+  for (const [f,t] of edges) {
+    const a = nodes[f], b = nodes[t];
+    dag.appendChild(el("line", {class:"edge", x1:a.x+W, y1:a.y+H/2, x2:b.x, y2:b.y+H/2,
+      stroke:"#5a514a", "stroke-width":1.6, "marker-end":"url(#arrow)"}));
+  }
+  for (const id in nodes) {
+    const n = nodes[id];
+    const g = el("g", {class:"node", "data-id":id});
+    g.appendChild(el("rect", {x:n.x, y:n.y, width:W, height:H, rx:8, fill:"#1a1614",
+      stroke:COLOR[n.type], "stroke-width":1.6}));
+    const t1 = el("text", {x:n.x+10, y:n.y+19, "font-weight":"600", fill:COLOR[n.type]}); t1.textContent = id;
+    const t2 = el("text", {x:n.x+10, y:n.y+35}); t2.textContent = n.label;
+    g.appendChild(t1); g.appendChild(t2);
+    g.addEventListener("click", () => trace(id));
+    dag.appendChild(g);
+  }
+}
+// provenance = transitive causes via reverse BFS
+function provenance(start) {
+  const seen = new Set(), q = [start];
+  while (q.length) {
+    const cur = q.shift();
+    for (const [f,t] of edges) if (t === cur && !seen.has(f)) { seen.add(f); q.push(f); }
+  }
+  return seen;
+}
+function trace(id) {
+  const prov = provenance(id);
+  const hit = new Set([id, ...prov]);
+  for (const g of dag.querySelectorAll(".node")) {
+    const nid = g.getAttribute("data-id");
+    g.classList.toggle("dim", !hit.has(nid));
+    g.classList.toggle("hit", prov.has(nid));
+  }
+  const why = document.getElementById("why");
+  if (prov.size === 0) { why.innerHTML = `<b>${nodes[id].label}</b> has no recorded provenance.`; return; }
+  const chain = [...prov].map(p => `${p} (${nodes[p].label})`).join(" &nbsp;←&nbsp; ");
+  why.innerHTML = `<b>why ${nodes[id].label}?</b><br>${id} &nbsp;←&nbsp; ${chain}`;
+}
+
+/* ───────── Decay curve ───────── */
+const DAYS = 90, C0 = 0.99;
+function decayAt(fn, rate, days) {
+  const t = days * 86400;                     // seconds
+  if (fn === "exp")  return C0 * Math.exp(-(rate*5e-8) * t);
+  if (fn === "pow")  return C0 * Math.pow(1 + t, -(rate*0.012));
+  /* step */         return days < (rate/100)*DAYS ? C0 : 0.2;
+}
+const dsvg = document.getElementById("decay");
+function drawDecay() {
+  const fn = document.getElementById("fn").value;
+  const rate = +document.getElementById("rate").value;
+  const days = +document.getElementById("elapsed").value;
+  const X0=44, X1=505, Y0=20, Y1=200;
+  const px = d => X0 + (d/DAYS)*(X1-X0);
+  const py = c => Y1 - c*(Y1-Y0);
+  dsvg.innerHTML = "";
+  // axes + gridlines
+  for (let c=0; c<=1; c+=0.25) {
+    dsvg.appendChild(el("line", {x1:X0, y1:py(c), x2:X1, y2:py(c), stroke:"#2a2420"}));
+    const lab = el("text", {x:8, y:py(c)+4, fill:"#9a8f84", "font-size":10}); lab.textContent = c.toFixed(2); dsvg.appendChild(lab);
+  }
+  const xl = el("text", {x:X1-30, y:Y1+24, fill:"#9a8f84", "font-size":10}); xl.textContent = "90 days"; dsvg.appendChild(xl);
+  // curve
+  let d = "";
+  for (let day=0; day<=DAYS; day++) d += (day?"L":"M") + px(day).toFixed(1) + "," + py(decayAt(fn,rate,day)).toFixed(1) + " ";
+  dsvg.appendChild(el("path", {d, fill:"none", stroke:"#e07a4a", "stroke-width":2}));
+  // now-marker
+  const c = decayAt(fn, rate, days);
+  dsvg.appendChild(el("line", {x1:px(days), y1:Y0, x2:px(days), y2:Y1, stroke:"#4a8fe0", "stroke-dasharray":"4 3"}));
+  dsvg.appendChild(el("circle", {cx:px(days), cy:py(c), r:4.5, fill:"#4a8fe0"}));
+  document.getElementById("el-d").textContent = days;
+  document.getElementById("conf").textContent = c.toFixed(3);
+}
+
+/* ───────── Time-travel ───────── */
+const versions = [
+  {tx:0,   val:"unknown",  c:0.30},
+  {tx:18,  val:"concise",  c:0.55},
+  {tx:40,  val:"concise",  c:0.74},
+  {tx:66,  val:"verbose",  c:0.50},
+  {tx:88,  val:"concise",  c:0.95},
+];
+const tt = document.getElementById("tt");
+function asOf(tx) { let v = null; for (const ver of versions) if (ver.tx <= tx) v = ver; return v; }
+function drawTT() {
+  const tx = +document.getElementById("asof").value;
+  const X0=40, X1=1000, Y=70, px = t => X0 + (t/100)*(X1-X0);
+  tt.innerHTML = "";
+  tt.appendChild(el("line", {x1:X0, y1:Y, x2:X1, y2:Y, stroke:"#5a514a", "stroke-width":2}));
+  const cur = asOf(tx);
+  versions.forEach((ver,i) => {
+    const next = versions[i+1] ? versions[i+1].tx : 100;
+    const active = cur && cur.tx === ver.tx;
+    tt.appendChild(el("rect", {x:px(ver.tx), y:Y-22, width:px(next)-px(ver.tx)-2, height:44, rx:6,
+      fill: active ? "#26303e" : "#1a1614", stroke: active ? "#4a8fe0" : "#2a2420", "stroke-width": active?2:1}));
+    const t1 = el("text", {x:px(ver.tx)+10, y:Y-4, fill:"#ece6df", "font-size":12, "font-weight":"600"}); t1.textContent = ver.val;
+    const t2 = el("text", {x:px(ver.tx)+10, y:Y+14, fill:"#9a8f84", "font-size":11}); t2.textContent = `tx≥${ver.tx} · c=${ver.c.toFixed(2)}`;
+    tt.appendChild(t1); tt.appendChild(t2);
+  });
+  // slider marker
+  tt.appendChild(el("line", {x1:px(tx), y1:Y-34, x2:px(tx), y2:Y+34, stroke:"#e07a4a", "stroke-width":2}));
+  tt.appendChild(el("circle", {cx:px(tx), cy:Y-34, r:4, fill:"#e07a4a"}));
+  document.getElementById("asof-v").textContent = tx;
+  document.getElementById("tt-val").textContent = cur ? cur.val : "(no belief yet)";
+  document.getElementById("tt-conf").textContent = cur ? cur.c.toFixed(2) : "—";
+}
+
+/* wire up */
+drawDAG(); trace("A1"); drawDecay(); drawTT();
+for (const id of ["fn","rate","elapsed"]) document.getElementById(id).addEventListener("input", drawDecay);
+document.getElementById("asof").addEventListener("input", drawTT);
+</script>
+</body>
+</html>

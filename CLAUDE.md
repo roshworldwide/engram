@@ -77,8 +77,8 @@ quick-orientation companion to it.
 - **Tooling note:** `protoc` (brew) + `maturin` (pip) installed on the reference machine. The default xtask/CI
   gate stays protoc/python-toolchain-free; dedicated `grpc` and `python` steps/jobs cover the opt-in features
   (skip when the tool is absent). pyo3 pinned to 0.29 for advisory cleanliness.
-- **R1–R8 all implemented and proven. P1–P8 + Q1/Q5/Q6 met.** Remaining: R9 (paper/eval), Q2 (full 10M fuzz),
-  Q3 (≥90% coverage), Q4 (≥10× vs PostgreSQL) — all Phase 4/5.
+- **R1–R9 all implemented and proven. P1–P8 + Q1/Q3/Q4/Q5/Q6 met.** Only Q2 (full 10M-iter fuzz) remains as
+  the nightly job; the four targets are smoke-clean with 0 crashes.
 - **Phase 4 — Consolidation + SRE demo + evaluation: COMPLETE.**
   - **4a** `engram-query::consolidation` — rule-based belief promotion from repeated evidence (pluggable
     `SignalExtractor`, dominant object, confidence `1−(1−w)^n`, provenance = source ids); `Engine::
@@ -86,10 +86,19 @@ quick-orientation companion to it.
   - **4b** `demos/sre` (`cargo xtask demo`) — the provenance killer demo (action → belief → observation).
   - **4c** `benches/compare_postgres` — **Q4 met: 165.8×** vs a hand-built PostgreSQL bitemporal schema;
     **Q3 met: 93.44%** line coverage (`cargo llvm-cov`).
-- **Status: R1–R8 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟡 (4 fuzz targets smoke-clean, full 10M nightly).**
-  Remaining: R9 paper + the rest of Phase 5 (mdBook, playground, example agents).
-- **Phase 5 — Paper, docs, playground, examples: NOT STARTED.** 5a VLDB-style paper (formal ACC + efficiency
-  proof, pulling numbers from BENCHMARKS); 5b mdBook + README; 5c causal-DAG playground; 5d five example agents.
+- **Phase 5 — Paper, docs, playground, examples: COMPLETE.**
+  - **5a** `docs/paper/engram.md` — full VLDB-targeted paper (formal ACC P1–P4, efficiency theorem + proof
+    sketch, evaluation table with real numbers, SRE case study).
+  - **5b** `docs/book/` mdBook (9 chapters, builds with `mdbook build docs/book`); README rewritten with a
+    results table; the `engram` CLI wired from a stub to real `Engine` calls (init/put/get/as-of/why/demo,
+    exit 2=usage / 1=runtime).
+  - **5c** `playground/index.html` — self-contained interactive playground (causal DAG · decay curve ·
+    time-travel slider); no build, no server.
+  - **5d** `examples/` — five Python-SDK agents (customer-support flagship + sre / personal-assistant /
+    knowledge-base / research), all run green; SDK gained optional `decay`/`decay_rate` params + case-
+    insensitive event types.
+- **Status: PROJECT COMPLETE. R1–R9 done; P1–P8 met; Q1/Q3/Q4/Q5/Q6 met; Q2 🟡 (4 fuzz targets smoke-clean,
+  full 10M is the nightly job).** Every commit green; `cargo xtask ci` GREEN.
 - **Tooling on ref machine:** protoc, maturin, postgresql@16, cargo-llvm-cov, cargo-fuzz + nightly all
   installed. Default xtask/CI gate stays toolchain-light; opt-in grpc/python steps + Q4/coverage are run
   on demand.

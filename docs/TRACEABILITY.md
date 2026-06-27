@@ -25,8 +25,10 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | R7 | ACC enforcement (RYW/monotonic/causal) | `engram-consistency/src/acc.rs` | `acc::tests` + `tests/acc_histories.rs` (Q1, 1200 histories) + `benches/multi_instance.rs` (P6) | ✅ Phase 3b |
 | R8 | Python SDK via PyO3 | `crates/engram-py/*` (pyo3 0.29, maturin) | `tests/test_engram.py` (SRE flow via `import engram`) + CI python job | ✅ Phase 3d |
 | §3 | Client APIs (engine + REST + gRPC) | `engram-query::Engine`, `engram-server` (axum/tonic) | `engram-query::engine::tests` + `tests/rest.rs` + `grpc::tests` | ✅ Phase 3c |
-| R9 | Research-grade rigor | `docs/paper/*`, benches, `compare_postgres`, `demos/sre` | reproducible eval (Q4) + SRE case study ✅; paper ⬜ Phase 5 | 🟡 eval+case study done; paper Phase 5 |
+| R9 | Research-grade rigor | `docs/paper/engram.md`, `docs/book/`, `compare_postgres`, `demos/sre`, `examples/`, `playground/` | paper (formal ACC + efficiency proof) + reproducible eval (Q4) + SRE case study + mdBook + 5 example agents | ✅ Phase 5 |
 | 4a | Consolidation (repeated evidence → belief) | `engram-query::consolidation` + `engram-server::consolidation` | `consolidation::tests` + `engine::tests` + background-task test | ✅ Phase 4a |
+| 5b | `engram` CLI over the engine | `crates/engram-cli` | `engram-cli::tests` (exit-code contract + `demo` end-to-end) | ✅ Phase 5b |
+| 5d | Python SDK example agents | `examples/*.py` | each script self-asserts; run green against the `engram` wheel | ✅ Phase 5d |
 
 ## Performance metrics (P1–P8)
 
