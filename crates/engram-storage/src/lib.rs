@@ -34,7 +34,7 @@ pub mod wal;
 
 pub use btree::{CowBTree, Iter, Snapshot};
 pub use error::{Result, StorageError};
-pub use stores::{BeliefInput, BeliefView, EpisodicStore, SemanticStore};
+pub use stores::{BeliefInput, BeliefView, EpisodicStore, ProceduralStore, SemanticStore};
 pub use wal::{scan_bytes, Recovered, Wal, WalEntry, WalOp};
 
 /// The semantic version of the Engram storage crate.

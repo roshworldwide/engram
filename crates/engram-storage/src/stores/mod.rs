@@ -5,7 +5,9 @@
 //! `working` (2e). The causal-provenance DAG store (2d) lives alongside them.
 
 pub mod episodic;
+pub mod procedural;
 pub mod semantic;
 
 pub use episodic::EpisodicStore;
+pub use procedural::ProceduralStore;
 pub use semantic::{BeliefInput, BeliefView, SemanticStore};
