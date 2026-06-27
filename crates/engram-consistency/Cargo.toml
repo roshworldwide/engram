@@ -17,3 +17,9 @@ serde = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+criterion = { workspace = true }
+mimalloc = "0.1"
+
+[[bench]]
+name = "multi_instance"
+harness = false

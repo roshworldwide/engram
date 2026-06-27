@@ -38,7 +38,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | **~318 ns** median (incl. a `clock.now()` syscall) | ✅ Phase 2b (~250× under p50) |
 | P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | **~162 ns** median (200-version `floor`) | ✅ Phase 2b |
 | P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | **~91 µs** @ depth 1000 (find_path ~139 µs) | ✅ Phase 2d (~22× under) |
-| P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | — | ⬜ Phase 3b |
+| P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | **~2.5 M ev/s** (10 threads, ACC causal delivery) | ✅ Phase 3b (~10× over) |
 | P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | eval primitive 1.1–5.3 ns; **full decay-on-read point query ~191 ns**, zero background CPU | ✅ Phase 2b |
 | P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | **128 ms median** (p99 ≈ 136 ms), 100% committed recovered | ✅ Phase 1b (~15× under) |
 | Q4 | Time-travel vs. hand-built PostgreSQL bitemporal schema | ≥ 10× faster | — | ⬜ Phase 4c |
@@ -47,10 +47,10 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 
 | #  | Gate | Target | Status |
 |----|------|--------|--------|
-| Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ⬜ Phase 3b |
+| Q1 | Randomized multi-agent property histories asserting ACC invariants | ≥ 1,000 | ✅ Phase 3b (1,200 cases; prefix-closure/RYW/monotonic/convergence) |
 | Q2 | Fuzz iterations, zero crashes (wal_reader / btree_ops / dag_decode / record_codec) | ≥ 10,000,000 each | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M local smoke, **0 crashes**; full 10M nightly + `dag_decode` (Phase 2d) pending |
 | Q3 | Line coverage on `engram-storage` + `engram-consistency` | ≥ 90% | ⬜ Phase 4 |
-| Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ⬜ Phase 3b |
+| Q5 | ACC metadata overhead per op | O(\|agents\|), ≤ 16 bytes/agent-slot, proven | ✅ Phase 3b (one clock/op; 16 B/slot, unit + proptest) |
 | Q6 | Clippy / rustfmt / `cargo test` / `cargo deny` | green every commit, clippy `-D warnings` | ✅ (all four green locally + in CI) |
 
 ## Tooling status on the reference machine

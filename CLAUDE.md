@@ -62,12 +62,15 @@ quick-orientation companion to it.
   `happens_before`/`concurrent_with`, causal partial order via `PartialOrd`, no-zero-entry invariant,
   canonical 16-byte/slot `to_bytes`/`from_bytes` (proves Q5 clock form). 6 unit + 9 proptest properties
   (partial-order laws + merge is the least upper bound). CI GREEN.
-- **Phase 3b — ACC enforcement: NOT STARTED.** Next: session coordinator + tag WAL entries with the writer's
-  vector clock; enforce read-your-writes / monotonic reads / causal memory (serving belief B verifies the
-  reader can reach B's causes); **no global lock/coordinator on the read/write path**; single-agent mode =
-  zero overhead. **Q1** (≥1000 randomized multi-agent histories assert all ACC invariants), **P6** (≥250k
-  ev/s, 10 instances), **Q5** (per-op overhead). Then 3c REST/gRPC (needs `protoc`), 3d Python SDK (PyO3,
-  needs `maturin`).
+- **Phase 3b — ACC enforcement: COMPLETE.** `engram-consistency::acc` — `CausalMemory` (shared append-only
+  log) + `Session` causal-delivery via vector clocks (no consensus/coordinator on the consistency path). API:
+  `session`/`write`/`refresh`/`read` (causal frontier) / `read_latest` (single monotonic value); deps derived
+  from the clock (one clock/op, Q5). **Q1 met (1,200 histories: prefix-closure/RYW/monotonic/convergence),
+  P6 met (~2.5 M ev/s, 10 instances), Q5 met (16 B/slot).** Adversarial review fixed a real Monotonic-Reads
+  violation in `read_latest` (per-session `last_read` cache) + frontier pruning of `by_key`. CI GREEN.
+- **Phase 3c/3d — REST/gRPC + Python SDK: NOT STARTED.** Need tools not yet installed: `protoc` (tonic/gRPC)
+  and `maturin` (PyO3 wheel) — install at the start of 3c/3d (decided with the user). 3c axum REST + tonic
+  gRPC over the stores/ACC; 3d PyO3 bindings → `engram` wheel. Then Phase 4 (consolidation, SRE demo, eval).
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

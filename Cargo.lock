@@ -232,7 +232,9 @@ dependencies = [
 name = "engram-consistency"
 version = "0.0.0"
 dependencies = [
+ "criterion",
  "engram-core",
+ "mimalloc",
  "proptest",
  "serde",
 ]

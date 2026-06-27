@@ -10,8 +10,10 @@
 //! Phase 3a ships the [`VectorClock`] engine; the session coordinator and the
 //! ACC validators land in Phase 3b.
 
+pub mod acc;
 pub mod vector_clock;
 
+pub use acc::{CausalMemory, Session, WriteOp};
 pub use vector_clock::{VectorClock, BYTES_PER_SLOT};
 
 /// The semantic version of the Engram consistency crate.

@@ -6,6 +6,26 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 3b — Agent Causal Consistency enforcement
+
+- `engram-consistency::acc` — the ACC engine (R7). A `CausalMemory` is a shared append-only log of writes;
+  each instance's `Session` delivers writes in **causal order** via vector clocks (`can_deliver` = FIFO from
+  the writer + all cross-instance dependencies present), with **no consensus, total order, or coordinator** on
+  the consistency path. A write's dependencies are *derived* from its clock (clock minus the writer's own
+  tick), so each op carries exactly one clock (Q5: 16 B/slot).
+- API: `session`, `write`, `refresh`, `read` (causal frontier — all concurrent siblings), `read_latest`
+  (single deterministic, **monotonic** value), `clock`, `is_delivered`. The storage engine uses no vector
+  clocks, so single-agent mode has zero ACC overhead.
+- **Q1 met:** 1,200 randomized multi-agent histories assert prefix-closure / read-your-writes / monotonic
+  sessions / convergence against an independent clock oracle. **P6 met:** ~2.5 M ev/s across 10 instances
+  (≥ 250 K target). **Q5 met:** one 16-B/slot clock per op.
+- Hardened by an adversarial review (delivery / invariants / concurrency / API, each finding verified): fixed
+  a real **Monotonic-Reads violation** — `read_latest` could flip to a *concurrent* sibling when one was
+  delivered after a value had been read; now a per-session `last_read` cache pins it to causally-≥ results
+  (+ regression test). Also: `by_key` is pruned to the live causal frontier on every write/deliver (bounds
+  memory + read cost, was O(n²)/unbounded), and a debug-only guard catches reused instance ids. Three
+  findings were correctly rejected.
+
 ### Phase 3a — Vector-clock engine
 
 - `engram-consistency::vector_clock::VectorClock` (R7) — the causal-history metadata for ACC.

@@ -215,3 +215,34 @@ the evicted entry is both returned from `push` and handed to an optional **conso
 clean seam to the Phase 4 consolidation engine (an evicted working item is exactly what consolidation promotes
 into a longer-term belief). A single global scratchpad (capacity 50) keeps 2e minimal; per-session
 partitioning can layer on top later.
+
+## ADR-0015 — Vector clock as a causal partial-order lattice (Phase 3a)
+
+**Status:** accepted (Phase 3a).
+
+`VectorClock` exposes the causal order through `PartialOrd` — `Less` = happens-before, `None` = concurrent —
+which is the most idiomatic Rust encoding and lets the proptest assert lattice laws directly. We keep a
+**no-zero-entry invariant** (an instance at counter 0 ≡ absent) so equality is structural. The wire form
+[`to_bytes`] is a canonical fixed-width **16 bytes/slot** (8-byte id + 8-byte counter, sorted) rather than
+MessagePack — MessagePack's `uint64` can be 9 bytes, which would break the ≤ 16 B/slot Q5 bound; the
+fixed-width form makes the bound exact and the encoding deterministic.
+
+## ADR-0016 — ACC as local causal delivery; monotonic single-value reads (Phase 3b)
+
+**Status:** accepted (Phase 3b).
+
+- **Causal delivery, no coordinator.** ACC is realized as classic vector-clock causal-order delivery over a
+  shared append-only log: an instance delivers a write only once it is the next from that writer and all the
+  write's cross-instance dependencies are already delivered locally. Visibility is a *local* decision from
+  clocks — no consensus, total order, or coordinator — which is what makes the O(\|agents\|)-metadata,
+  no-global-sync claim (R7/§9) true. The shared `Mutex<Vec>` is just the append substrate (a single-process
+  stand-in for per-replica logs + gossip), not a consistency coordinator.
+- **Dependencies are derived, not stored.** A write carries exactly one clock; its dependency set is the
+  clock minus the writer's own latest tick. That keeps per-op metadata at one 16 B/slot clock (Q5).
+- **Reads: frontier vs. monotonic single value.** `read` returns the causal frontier (all concurrent
+  siblings) and is inherently monotonic (a value leaves the frontier only when causally superseded).
+  `read_latest` projects a single deterministic value — and the Phase 3b adversarial review found that the
+  naïve tiebreak could *regress to a concurrent sibling* when one arrived after a value had been read,
+  violating Monotonic Sessions (§9.3). Fixed with a per-session `last_read` cache that only accepts a winner
+  causally ≥ the last value returned. `by_key` is also pruned to the live frontier on every write/deliver,
+  bounding memory and read cost to the concurrency width.
