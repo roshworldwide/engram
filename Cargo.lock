@@ -233,6 +233,8 @@ name = "engram-consistency"
 version = "0.0.0"
 dependencies = [
  "engram-core",
+ "proptest",
+ "serde",
 ]
 
 [[package]]

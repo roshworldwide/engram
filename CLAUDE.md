@@ -58,9 +58,16 @@ quick-orientation companion to it.
 - **All four memory types (R2) + causal DAG (R5) are done. P1–P5, P7, P8 all met.** Stores share a
   duplicated WAL-writer pattern (Writer{wal,tx,counter,failed} + monotonic tx + recovery) — a candidate for a
   future `mod common` refactor.
-- **Phase 3 — ACC consistency layer + APIs + Python SDK: NOT STARTED.** Next: 3a vector-clock engine; 3b ACC
-  enforcement (read-your-writes / monotonic reads / causal memory, no global sync), Q1 (≥1000 randomized
-  multi-agent histories), P6 (≥250k ev/s, 10 instances), Q5; 3c REST/gRPC; 3d Python SDK (PyO3).
+- **Phase 3a — Vector-clock engine: COMPLETE.** `engram-consistency::VectorClock` (R7) — `increment`/`merge`/
+  `happens_before`/`concurrent_with`, causal partial order via `PartialOrd`, no-zero-entry invariant,
+  canonical 16-byte/slot `to_bytes`/`from_bytes` (proves Q5 clock form). 6 unit + 9 proptest properties
+  (partial-order laws + merge is the least upper bound). CI GREEN.
+- **Phase 3b — ACC enforcement: NOT STARTED.** Next: session coordinator + tag WAL entries with the writer's
+  vector clock; enforce read-your-writes / monotonic reads / causal memory (serving belief B verifies the
+  reader can reach B's causes); **no global lock/coordinator on the read/write path**; single-agent mode =
+  zero overhead. **Q1** (≥1000 randomized multi-agent histories assert all ACC invariants), **P6** (≥250k
+  ev/s, 10 instances), **Q5** (per-op overhead). Then 3c REST/gRPC (needs `protoc`), 3d Python SDK (PyO3,
+  needs `maturin`).
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

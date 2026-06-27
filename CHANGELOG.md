@@ -6,6 +6,18 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 3a — Vector-clock engine
+
+- `engram-consistency::vector_clock::VectorClock` (R7) — the causal-history metadata for ACC.
+  `increment`/`merge`/`merged`/`happens_before`/`concurrent_with`, with the causal partial order exposed via
+  `PartialOrd` (`Less` = happens-before, `None` = concurrent). Invariant: zero counters are never stored, so
+  equality is structural.
+- `to_bytes`/`from_bytes` — a canonical, fixed-width wire form of **exactly 16 bytes per instance** (8-byte
+  id + 8-byte counter, sorted), proving the Q5 metadata bound (`O(|agents|)`, ≤ 16 B/slot).
+- Tests: 6 unit + a 9-property proptest suite (happens-before is irreflexive/asymmetric/transitive; exactly
+  one causal relation between any two clocks; `merge` is the commutative **least upper bound** of the clock
+  lattice; increment advances causally; byte round-trip + 16 B/slot size).
+
 ### Phase 2e — Working memory
 
 - `engram-storage::stores::working::WorkingMemory` — a bounded FIFO scratchpad (R2), default capacity 50,

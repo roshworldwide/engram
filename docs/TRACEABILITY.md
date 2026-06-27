@@ -21,7 +21,8 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | R5 | Causal-provenance DAG | `engram-storage/src/stores/causal.rs` | `causal::tests` + `tests/dag.rs` (acyclic proptest) + `dag_ops` fuzz + `benches/provenance.rs` (P5) | ✅ Phase 2d |
 | R6 | Write-Ahead Log | `engram-storage/src/wal.rs` | `wal::tests` + `tests/wal_recovery.rs` (proptest) + recovery bench (P8) | ✅ Phase 1b |
 | R6 | CoW B-tree → MVCC | `engram-storage/src/btree.rs` | `btree::tests` (MVCC isolation, concurrent readers) + `tests/btree_oracle.rs` + `btree_ops` fuzz + 1M gate | ✅ Phase 1c |
-| R7 | Agent Causal Consistency | `engram-consistency/src/*` | ACC property suite (Q1) | ⬜ Phase 3 |
+| R7 | Vector-clock engine | `engram-consistency/src/vector_clock.rs` | `vector_clock::tests` + `tests/vector_clock_props.rs` (partial-order + LUB) | ✅ Phase 3a |
+| R7 | ACC enforcement (RYW/monotonic/causal) | `engram-consistency/src/*` | ACC property suite (Q1) | ⬜ Phase 3b |
 | R8 | Python SDK via PyO3 | `crates/engram-py/*` | end-to-end Python test | ⬜ Phase 3d |
 | R9 | Research-grade rigor | `docs/paper/*`, benches, proptests | paper + reproducible eval | ⬜ Phase 5 |
 
@@ -46,5 +47,5 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | Q2 | ≥ 10M fuzz iters, zero crashes (×4 targets) | `fuzz/fuzz_targets/*` (nightly) | 🟡 `record_codec` 2.1M + `wal_reader` 390k + `btree_ops` 1.1M + `dag_ops` 170k smoke, 0 crashes; full 10M nightly pending |
 | Q3 | ≥ 90% coverage (storage + consistency) | `cargo llvm-cov` in CI | ⬜ Phase 4 |
 | Q4 | ≥ 10× faster time-travel vs PostgreSQL | `benches/compare_postgres/` | ⬜ Phase 4c |
-| Q5 | ACC overhead O(\|agents\|), ≤ 16 B/slot, proven | `engram-consistency` size test + bench | ⬜ Phase 3b |
+| Q5 | ACC overhead O(\|agents\|), ≤ 16 B/slot, proven | `vector_clock::to_bytes` (16 B/slot) + proptest size check | 🟡 clock form proven (16 B/slot); per-op overhead Phase 3b |
 | Q6 | fmt/clippy(-D)/test/deny green every commit | `cargo xtask ci` + CI | ✅ (all green locally + in CI) |
