@@ -68,9 +68,21 @@ quick-orientation companion to it.
   from the clock (one clock/op, Q5). **Q1 met (1,200 histories: prefix-closure/RYW/monotonic/convergence),
   P6 met (~2.5 M ev/s, 10 instances), Q5 met (16 B/slot).** Adversarial review fixed a real Monotonic-Reads
   violation in `read_latest` (per-session `last_read` cache) + frontier pruning of `by_key`. CI GREEN.
-- **Phase 3c/3d — REST/gRPC + Python SDK: NOT STARTED.** Need tools not yet installed: `protoc` (tonic/gRPC)
-  and `maturin` (PyO3 wheel) — install at the start of 3c/3d (decided with the user). 3c axum REST + tonic
-  gRPC over the stores/ACC; 3d PyO3 bindings → `engram` wheel. Then Phase 4 (consolidation, SRE demo, eval).
+- **Phase 3c — REST/gRPC: COMPLETE.** `engram-query::Engine` bundles the 4 stores + DAG over a data dir and
+  links writes into provenance. `engram-server`: axum REST (episodic/semantic/provenance/health) + tonic gRPC
+  (same ops, behind opt-in `grpc` feature so default builds need no `protoc`). In-process REST + gRPC tests.
+- **Phase 3d — Python SDK: COMPLETE.** `engram-py` → the `engram` module (pyo3 0.29, abi3, behind opt-in
+  `python` feature). `maturin develop` builds the wheel; `tests/test_engram.py` runs the SRE flow via
+  `import engram`. R8 done.
+- **Tooling note:** `protoc` (brew) + `maturin` (pip) installed on the reference machine. The default xtask/CI
+  gate stays protoc/python-toolchain-free; dedicated `grpc` and `python` steps/jobs cover the opt-in features
+  (skip when the tool is absent). pyo3 pinned to 0.29 for advisory cleanliness.
+- **R1–R8 all implemented and proven. P1–P8 + Q1/Q5/Q6 met.** Remaining: R9 (paper/eval), Q2 (full 10M fuzz),
+  Q3 (≥90% coverage), Q4 (≥10× vs PostgreSQL) — all Phase 4/5.
+- **Phase 4 — Consolidation + SRE demo + evaluation: NOT STARTED.** Next: 4a consolidation engine (promote
+  beliefs from repeated episodic evidence, causally linked); 4b the SRE killer demo (`cargo xtask demo`);
+  4c evaluation harness incl. **Q4 (≥10× time-travel vs a hand-built PostgreSQL bitemporal schema)**,
+  full criterion suite, Q3 coverage, Q2 10M-iter nightly fuzz.
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

@@ -23,7 +23,8 @@ Status: ⬜ pending · 🟡 in progress · ✅ proven (green test/bench in CI).
 | R6 | CoW B-tree → MVCC | `engram-storage/src/btree.rs` | `btree::tests` (MVCC isolation, concurrent readers) + `tests/btree_oracle.rs` + `btree_ops` fuzz + 1M gate | ✅ Phase 1c |
 | R7 | Vector-clock engine | `engram-consistency/src/vector_clock.rs` | `vector_clock::tests` + `tests/vector_clock_props.rs` (partial-order + LUB) | ✅ Phase 3a |
 | R7 | ACC enforcement (RYW/monotonic/causal) | `engram-consistency/src/acc.rs` | `acc::tests` + `tests/acc_histories.rs` (Q1, 1200 histories) + `benches/multi_instance.rs` (P6) | ✅ Phase 3b |
-| R8 | Python SDK via PyO3 | `crates/engram-py/*` | end-to-end Python test | ⬜ Phase 3d |
+| R8 | Python SDK via PyO3 | `crates/engram-py/*` (pyo3 0.29, maturin) | `tests/test_engram.py` (SRE flow via `import engram`) + CI python job | ✅ Phase 3d |
+| §3 | Client APIs (engine + REST + gRPC) | `engram-query::Engine`, `engram-server` (axum/tonic) | `engram-query::engine::tests` + `tests/rest.rs` + `grpc::tests` | ✅ Phase 3c |
 | R9 | Research-grade rigor | `docs/paper/*`, benches, proptests | paper + reproducible eval | ⬜ Phase 5 |
 
 ## Performance metrics (P1–P8)

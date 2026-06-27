@@ -6,6 +6,26 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 3d — Python SDK (PyO3)
+
+- `engram-py` exposes the engine to Python as the `engram` module (R8; pyo3 0.29, abi3-py39): `Engram(path)`
+  with `record_event`, `upsert_belief`, `current_belief`, `belief_at` (time-travel), `provenance`. Cause and
+  provenance ids are linked into the DAG, so `mem.provenance(action)` traces back to the root-cause event.
+- PyO3 is behind an opt-in `python` feature (default-off), so the Rust workspace gate builds an empty cdylib
+  with no Python toolchain; maturin builds the wheel with the feature on. Verified: `maturin develop` builds
+  an abi3 wheel and `tests/test_engram.py` runs the SRE flow through `import engram`.
+
+### Phase 3c — REST + gRPC surfaces
+
+- `engram-query::Engine` — bundles the four stores + causal DAG over one data directory and links writes into
+  provenance; the integration point for the surfaces and the SDK.
+- `engram-server` REST (axum): `POST/GET /memories/episodic`, `POST/GET /memories/semantic` (current or
+  `at_ms` time-travel), `GET /memories/provenance/:id`, `/health`. In-process `tower::oneshot` test of the
+  full SRE flow.
+- gRPC (tonic) mirrors the same ops, generated from `proto/engram.proto`. Behind an opt-in `grpc` feature so
+  the default build needs no `protoc`; CI/xtask gain dedicated grpc + python steps (skipped when the tool is
+  absent), and `--all-features` is dropped from the default clippy to stay protoc-free.
+
 ### Phase 3b — Agent Causal Consistency enforcement
 
 - `engram-consistency::acc` — the ACC engine (R7). A `CausalMemory` is a shared append-only log of writes;
