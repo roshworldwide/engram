@@ -6,7 +6,12 @@
 //! provenance tracer (R5), and the working-memory cap. Sits above the storage
 //! and consistency layers; requests flow down, results flow up.
 //!
-//! **Phase 0 scaffold.**
+//! Phase 3c: the [`Engine`] bundles the four stores + the causal DAG over one
+//! data directory; the REST/gRPC server and the Python SDK build on it.
+
+pub mod engine;
+
+pub use engine::Engine;
 
 /// The semantic version of the Engram query crate.
 #[must_use]

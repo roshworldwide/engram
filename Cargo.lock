@@ -264,6 +264,7 @@ dependencies = [
  "engram-consistency",
  "engram-core",
  "engram-storage",
+ "tempfile",
 ]
 
 [[package]]

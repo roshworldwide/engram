@@ -15,3 +15,6 @@ workspace = true
 engram-core = { workspace = true }
 engram-storage = { workspace = true }
 engram-consistency = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
