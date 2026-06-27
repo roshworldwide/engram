@@ -11,8 +11,19 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
-# In Phase 3d this becomes `crate-type = ["cdylib"]` with a PyO3 dependency and a
-# maturin build backend. Kept as a plain library for the dependency-free Phase 0
-# scaffold so the whole workspace builds on stable without maturin installed.
+[lib]
+name = "engram"
+# cdylib for the Python wheel; rlib so the default workspace build/clippy/test
+# can still treat it as a normal crate.
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 engram-core = { workspace = true }
+engram-query = { workspace = true }
+# PyO3 is opt-in (the `python` feature). The default workspace gate builds this
+# crate WITHOUT it, so `cargo build/test --workspace` needs no libpython; maturin
+# builds the wheel with `--features python`.
+pyo3 = { version = "0.29", features = ["extension-module", "abi3-py39"], optional = true }
+
+[features]
+python = ["dep:pyo3"]

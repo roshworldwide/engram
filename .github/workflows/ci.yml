@@ -52,6 +52,25 @@ jobs:
       - name: test (grpc)
         run: cargo test -p engram-server --features grpc
 
+  # Python SDK (R8): build the wheel with maturin and run the SDK test.
+  python:
+    name: Python SDK (maturin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: Swatinem/rust-cache@v2
+      - name: build wheel + run SDK test
+        working-directory: crates/engram-py
+        run: |
+          pip install maturin
+          maturin build --features python --out ../../dist
+          pip install --find-links ../../dist engram
+          python tests/test_engram.py
+
   # Supply-chain gate (Q6): licenses + advisories + the no-storage-engine ban.
   supply-chain:
     name: cargo-deny

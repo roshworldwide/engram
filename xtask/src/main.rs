@@ -38,6 +38,7 @@ fn main() -> ExitCode {
         ),
         "fuzz" => optional("Fuzz smoke", "fuzz", &["fuzz", "list"]),
         "grpc" => !matches!(grpc_step(), Outcome::Failed),
+        "python" => !matches!(python_step(), Outcome::Failed),
         "demo" => cmd_demo(),
         "help" | "--help" | "-h" => {
             print_help();
@@ -176,6 +177,30 @@ fn grpc_step() -> Outcome {
     )
 }
 
+/// Clippy the optional `python` feature of the PyO3 bindings (needs `python3` for
+/// the pyo3 build config). Skips cleanly when python3 is absent. The wheel build +
+/// pytest run live in a dedicated CI job.
+fn python_step() -> Outcome {
+    if !binary_present("python3") {
+        let reason = "python3 not installed".to_string();
+        println!("\n==> python feature: SKIP — {reason}");
+        return Outcome::Skipped(reason);
+    }
+    step(
+        "python bindings clippy",
+        &[
+            "clippy",
+            "-p",
+            "engram-py",
+            "--features",
+            "python",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )
+}
+
 /// The full local gate. Optional tools degrade to `SKIP`.
 fn cmd_ci() -> bool {
     // Evaluated left-to-right, so the gate steps run in this order.
@@ -191,6 +216,7 @@ fn cmd_ci() -> bool {
         ),
         ("test", step("Tests", &["test", "--workspace"])),
         ("grpc feature", grpc_step()),
+        ("python feature", python_step()),
         (
             "cargo-deny",
             optional_step("Supply chain", "deny", &["deny", "check"]),

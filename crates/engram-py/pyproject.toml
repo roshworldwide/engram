@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "engram"
+version = "0.0.0"
+description = "Python bindings for the Engram AI-agent memory engine"
+requires-python = ">=3.9"
+license = { text = "MIT OR Apache-2.0" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+]
+
+[tool.maturin]
+# Build the PyO3 bindings (off by default so the Rust workspace gate is
+# Python-toolchain-free).
+features = ["python"]
