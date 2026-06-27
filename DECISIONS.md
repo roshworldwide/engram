@@ -188,3 +188,30 @@ torn-tail truncation is harmless because recovery is CRC-gated).
   predecessor (so a concurrent reader never sees the belief vanish), and a partial WAL append **poisons the
   writer** so `commit` refuses — recovery then drops the orphaned, uncommitted frames. Recovery also folds
   `tx_until` (not just `tx_from`) into the resumed monotonic clock so a retract+reopen can't regress tx-time.
+
+## ADR-0013 — Causal-DAG store: dual adjacency, BFS traversal, eager cycle rejection (Phase 2d)
+
+**Status:** accepted (Phase 2d).
+
+- **Two CoW B-trees, not a graph library.** R5 forbids a third-party graph crate, and the engine already has
+  the CoW B-tree. An edge is stored as both `(from, to) → edge_type` (forward) and `(to, from) → edge_type`
+  (reverse), so `effects_of`/`causes_of` are prefix range scans and `find_provenance_chain`/`find_path` are
+  plain BFS over them. No separate graph structure to keep consistent or persist.
+- **Eager cycle rejection.** `add_edge(from, to)` is rejected iff `from == to` or `from` is already reachable
+  from `to` (a BFS before the write). This keeps the **acyclic invariant** as a hard precondition, validated
+  on every add, rather than detected later. Replay trusts committed edges (each was validated at add time),
+  so recovery does not re-run the check. The invariant is fuzzed (`dag_ops`) and proptested against an
+  independent Kahn's-algorithm oracle.
+- **Durable or ephemeral.** The DAG works `in_memory()` (no WAL) for the query layer, demos, benches, and
+  fuzzing, or WAL-backed for durable provenance — one `Option<Wal>` in the writer, no API split.
+
+## ADR-0014 — Working memory is an in-memory bounded FIFO with an eviction hook (Phase 2e)
+
+**Status:** accepted (Phase 2e).
+
+Working memory is the agent's short-term scratchpad — small, fast, ephemeral — so it is a plain bounded
+`VecDeque` behind a mutex, **not** WAL-backed (losing scratch on restart is correct). Overflow evicts FIFO;
+the evicted entry is both returned from `push` and handed to an optional **consolidation hook**, which is the
+clean seam to the Phase 4 consolidation engine (an evicted working item is exactly what consolidation promotes
+into a longer-term belief). A single global scratchpad (capacity 50) keeps 2e minimal; per-session
+partitioning can layer on top later.

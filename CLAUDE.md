@@ -48,10 +48,19 @@ quick-orientation companion to it.
   (`BeliefView`); injectable `Clock`. 6 unit tests. **P3 ~318 ns, P4 ~162 ns @ 200 versions, P7 ~191 ns full
   read — all met.** Adversarial review fixed a non-atomic upsert (live-belief loss on mid-write error, now
   poisoned-writer guarded) and a recovery water-mark ignoring `tx_until`. CI GREEN.
-- **Phase 2c/2d/2e — Procedural / Causal-DAG / Working memory: NOT STARTED.** Next: 2c procedural store
-  (versioned skills, `supersedes` chain); 2d causal-DAG store (adjacency + reverse index, `add_edge`,
-  `get_causes`/`get_effects`, `find_provenance_chain` BFS/DFS, **cycle rejection**, bench P5, `dag_decode`
-  fuzz); 2e bounded working memory (FIFO cap 50, eviction→consolidation hook). Then Phase 3 (ACC).
+- **Phase 2c/2d/2e — Procedural / Causal-DAG / Working memory: COMPLETE.**
+  - **2c `ProceduralStore`** — versioned skills keyed `(agent, name, version)`, `supersedes` chain, `latest`/
+    `get_version`/`history`; WAL-durable. 3 tests.
+  - **2d `CausalDag`** (R5) — forward+reverse adjacency in two CoW B-trees, `add_edge` with **cycle rejection**
+    (BFS), `effects_of`/`causes_of`, `find_provenance_chain`/`find_path`; durable or `in_memory`. 5 unit +
+    acyclic-invariant proptest (Kahn oracle) + `dag_ops` fuzz (170k smoke). **P5 met (~91 µs @ depth 1000).**
+  - **2e `WorkingMemory`** — bounded FIFO (default cap 50), eviction→consolidation hook; ephemeral. 4 tests.
+- **All four memory types (R2) + causal DAG (R5) are done. P1–P5, P7, P8 all met.** Stores share a
+  duplicated WAL-writer pattern (Writer{wal,tx,counter,failed} + monotonic tx + recovery) — a candidate for a
+  future `mod common` refactor.
+- **Phase 3 — ACC consistency layer + APIs + Python SDK: NOT STARTED.** Next: 3a vector-clock engine; 3b ACC
+  enforcement (read-your-writes / monotonic reads / causal memory, no global sync), Q1 (≥1000 randomized
+  multi-agent histories), P6 (≥250k ev/s, 10 instances), Q5; 3c REST/gRPC; 3d Python SDK (PyO3).
 - **Note:** the CoW write path is allocation-bound; the throughput bench links mimalloc (production allocator).
   Cross-index atomic snapshots are deferred to the ACC layer (Phase 3); per-index reads are MVCC-consistent.
 

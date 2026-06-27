@@ -37,7 +37,7 @@ Status legend: ⬜ pending (target phase) · 🟡 measured, below target (gap lo
 | P2 | Bulk/batched write throughput | ≥ 300,000 ev/s | **414 K ev/s** bulk (mimalloc); 295 K system allocator | ✅ Phase 2a (mimalloc) |
 | P3 | Semantic point-query latency (current time) | < 400 µs p99, < 80 µs p50 | **~318 ns** median (incl. a `clock.now()` syscall) | ✅ Phase 2b (~250× under p50) |
 | P4 | Time-travel query (≥ 12 mo / ≥ 200 versions) | < 5 ms p99 | **~162 ns** median (200-version `floor`) | ✅ Phase 2b |
-| P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | — | ⬜ Phase 2d |
+| P5 | Provenance-chain trace (depth ≤ 1,000) | < 2 ms p99 | **~91 µs** @ depth 1000 (find_path ~139 µs) | ✅ Phase 2d (~22× under) |
 | P6 | Multi-instance write throughput (10 instances, ACC on) | ≥ 250,000 ev/s | — | ⬜ Phase 3b |
 | P7 | Confidence-decay evaluation cost (per belief, on read) | < 500 ns, zero background CPU | eval primitive 1.1–5.3 ns; **full decay-on-read point query ~191 ns**, zero background CPU | ✅ Phase 2b |
 | P8 | Crash recovery: replay 1,000,000 WAL entries | < 2 s, 100% committed recovered | **128 ms median** (p99 ≈ 136 ms), 100% committed recovered | ✅ Phase 1b (~15× under) |

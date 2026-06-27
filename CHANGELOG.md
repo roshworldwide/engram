@@ -6,6 +6,32 @@ milestone.
 
 ## [Unreleased]
 
+### Phase 2e — Working memory
+
+- `engram-storage::stores::working::WorkingMemory` — a bounded FIFO scratchpad (R2), default capacity 50,
+  ephemeral (no WAL). `push` evicts the oldest entry over capacity, returning it *and* passing it to an
+  optional **consolidation hook** (`with_hook`) — the hand-off point to Phase 4 consolidation. `items`/`ids`/
+  `len`/`capacity`/`clear`. 4 unit tests (FIFO eviction, hook invocation, default cap).
+
+### Phase 2d — Causal-provenance DAG store
+
+- `engram-storage::stores::causal::CausalDag` (R5) — edges stored twice (forward `(from, to)` + reverse
+  `(to, from)` adjacency) in two CoW B-trees, so `effects_of`/`causes_of` are `O(log n + k)` prefix scans.
+  Durable (WAL-backed `create`/`open`) or ephemeral (`in_memory`).
+- `add_edge` keeps the graph **acyclic**: rejects self-loops and any edge whose reverse path already exists
+  (`StorageError::Cycle`), checked by BFS before the WAL write. `find_provenance_chain` (BFS over reverse) and
+  `find_path` (BFS over forward) trace provenance. `open` replays committed (already-validated) edges.
+- Tests: 5 unit + a proptest checking the acyclic invariant (independent Kahn's topo-sort) and that
+  `add_edge` accepts/rejects exactly per an independent reachability oracle. `dag_ops` cargo-fuzz target
+  (170k-run smoke, 0 crashes). **P5 met: provenance trace @ depth 1000 ~91 µs** (target < 2 ms).
+
+### Phase 2c — Procedural store
+
+- `engram-storage::stores::procedural::ProceduralStore` — versioned skills (R2) keyed `(agent_id, name,
+  version)`; `put_skill` appends `version = prev + 1` with `supersedes` linking the prior version. `latest`
+  (floor at `version = u32::MAX`), `get_version`, `history`, `get_by_id`; WAL-durable with recovery. 3 unit
+  tests.
+
 ### Phase 2b — Semantic store (bitemporal + lazy decay)
 
 - `CowBTree::floor` — the greatest entry `≤ key` in `O(log n)` (the as-of primitive), with a unit test and a

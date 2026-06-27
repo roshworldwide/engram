@@ -36,6 +36,7 @@ pub use btree::{CowBTree, Iter, Snapshot};
 pub use error::{Result, StorageError};
 pub use stores::{
     BeliefInput, BeliefView, CausalDag, EpisodicStore, ProceduralStore, SemanticStore,
+    WorkingMemory,
 };
 pub use wal::{scan_bytes, Recovered, Wal, WalEntry, WalOp};
 
